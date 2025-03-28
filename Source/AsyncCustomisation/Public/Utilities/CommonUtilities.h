@@ -51,7 +51,7 @@ namespace CommonUtilities
 		UE_LOG(LogTemp, Warning, TEXT("AssetId.PrimaryAssetName:: %s"), *AssetId.PrimaryAssetName.ToString());
 		
 		AssetId.PrimaryAssetType = GLOBAL_CONSTANTS::PrimaryItemAssetType;
-		UE_LOG(LogTemp, Warning, TEXT("AssetId.PrimaryAssetType:: %s"), *AssetId.PrimaryAssetType.ToString());
+		//UE_LOG(LogTemp, Warning, TEXT("AssetId.PrimaryAssetType:: %s"), *AssetId.PrimaryAssetType.ToString());
 		return AssetId;
 	}
 

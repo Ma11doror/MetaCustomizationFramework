@@ -235,7 +235,7 @@ void UCustomizationComponent::Invalidate(const bool bDeffer, ECustomizationInval
 	FString MapStr;
 	for (const auto& Pair : InvalidationContext.Current.EquippedBodyPartsItems)
 	{
-		MapStr += FString::Printf(TEXT("InvalidationContext.Old.EquippedBodyPartsItems after invalidation[%s: %d], "), *Pair.Key.ToString(), Pair.Value);
+		MapStr += FString::Printf(TEXT(" || [%s: %d] "), *Pair.Key.ToString(), Pair.Value);
 	}
 	
 	UE_LOG(LogTemp, Warning, TEXT("InvalidationContext.Old Body parts equipped: %s"), *MapStr);
@@ -364,11 +364,9 @@ void UCustomizationComponent::InvalidateBodyParts()
 		// Step 1: Gather Item AssetId associations
 		TMap<FPrimaryAssetId, FName> AddedAssetIdsToSlugs;
 		TArray<FPrimaryAssetId> ItemRelatedBodyPartIds;
-
-		UE_LOG(LogTemp, Display, TEXT("InvalidateBodyParts: Added items:"));
+		
 		for (const auto& [ItemSlug, BodyPartType] : InvalidationContext.Added.EquippedBodyPartsItems)
 		{
-			UE_LOG(LogTemp, Display, TEXT("  Item: %s, Type: %s"), *ItemSlug.ToString(), *UEnum::GetValueAsString(BodyPartType));
 			FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(ItemSlug);
 			AddedAssetIdsToSlugs.Emplace(AssetId, ItemSlug);
 			ItemRelatedBodyPartIds.Emplace(AssetId);
@@ -391,15 +389,19 @@ void UCustomizationComponent::InvalidateBodyParts()
 				TMap<FName, EBodyPartType> AddedItemsRealTypes;
 				for (const auto& ItemRelatedBodyPart : ItemRelatedBodyParts)
 				{
-					const FPrimaryAssetId AssetId = ItemRelatedBodyPart->GetPrimaryAssetId();
-					const FName Slug = AddedAssetIdsToSlugs[AssetId];
+					const FPrimaryAssetId PrimaryAssetId = ItemRelatedBodyPart->GetPrimaryAssetId();
+					const FName Slug = AddedAssetIdsToSlugs[PrimaryAssetId];
                     
 					auto* ItemBodyPartVariant = ItemRelatedBodyPart->GetMatchedVariant(EquippedItemAssetIds);
 					if (ItemBodyPartVariant && ItemBodyPartVariant->IsValid())
 					{
 						AddedItemsRealTypes.Add(Slug, ItemBodyPartVariant->BodyPartType);
 					}
-				} 
+
+					UE_LOG(LogTemp, Warning, TEXT("Item %s Got type %s"),
+					*Slug.ToString(),
+					*UEnum::GetValueAsString(ItemBodyPartVariant->BodyPartType));
+				}
 				// Step 5: check if we have conflicting items
 				// if there are items with same type - add them to remove list
 				TArray<FPrimaryAssetId> IncludeOldEquippedItemAssetIds = CommonUtilities::ItemSlugsToAssetIds(InvalidationContext.Current.GetEquippedSlugs());
@@ -415,7 +417,9 @@ void UCustomizationComponent::InvalidateBodyParts()
 						{
 							ConflictRemoves.Add(ExistingSlug, ExistingType);
 							UE_LOG(LogTemp, Warning, TEXT("Found conflict: Item %s of type %s conflicts with new item %s"),
-								   *ExistingSlug.ToString(), *UEnum::GetValueAsString(ExistingType), *NewItemSlug.ToString());
+								*ExistingSlug.ToString(),
+								*UEnum::GetValueAsString(ExistingType),
+								*NewItemSlug.ToString());
 						}
 					}
 				}
@@ -442,7 +446,12 @@ void UCustomizationComponent::InvalidateBodyParts()
 						CollectedNewContextData.EquippedBodyPartsItems.Remove(ItemSlug);
 					}
 				}
+				
+				// Step 6.5: Clear skin coverage flags and recollect it 
+				CollectedNewContextData.SkinVisibilityFlags.ClearAllFlags();
+				
                 // Step 7: Apply added parts
+				
                 UE_LOG(LogTemp, Warning, TEXT("InvalidateBodyParts: Applying new items"));
                 for (const auto& ItemRelatedBodyPart : ItemRelatedBodyParts)
                 {
@@ -458,22 +467,18 @@ void UCustomizationComponent::InvalidateBodyParts()
                     EBodyPartType RealPartType = ItemBodyPartVariant->BodyPartType;
                     
                     // check for existing or conflicting item
-                    bool bHasConflict = false;
+
                     for (const auto& [ExistingSlug, ExistingType] : InvalidationContext.Current.EquippedBodyPartsItems)
                     {
                         if (ExistingType == RealPartType && ExistingSlug != Slug)
                         {
-                            bHasConflict = true;
+                        	UE_LOG(LogTemp, Warning, TEXT("For some reason we have a conflict for item %s of type %s, skipping"),
+							   *Slug.ToString(),
+							   *UEnum::GetValueAsString(RealPartType));
                             break;
                         }
                     }
                     
-                    if (bHasConflict)
-                    {
-                        UE_LOG(LogTemp, Warning, TEXT("Still have conflict for item %s of type %s, skipping"),
-                               *Slug.ToString(), *UEnum::GetValueAsString(RealPartType));
-                        continue;
-                    }
                     
                     CustomizationUtilities::SetBodyPartSkeletalMesh(this, ItemBodyPartVariant->BodyPartSkeletalMesh, RealPartType);
                     
@@ -512,30 +517,30 @@ void UCustomizationComponent::InvalidateBodyParts()
 					CollectedNewContextData.EquippedBodyPartsItems.Add(BodyPartSlug, BodyPartVariant->BodyPartType);
 				}
 
-                        // Step 9: Apply Body skin depend on body part flags
-                        FSkinFlagCombination Name{};
-                        auto SkinMesh = Name.GetMatch(DataAsset->SkinAssociation, CollectedNewContextData.SkinVisibilityFlags.FlagMask);
-                        if (SkinMesh)
-                        {
-                            UsedPartTypes.Emplace(EBodyPartType::BodySkin);
-                            CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMesh->BodyPartSkeletalMesh, EBodyPartType::BodySkin);
-                        }
+                // Step 9: Apply Body skin depend on body part flags
+                auto SkinMesh = CollectedNewContextData.SkinVisibilityFlags.GetMatch(DataAsset->SkinAssociation, CollectedNewContextData.SkinVisibilityFlags.FlagMask);
+                if (SkinMesh)
+                {
+                    UsedPartTypes.Emplace(EBodyPartType::BodySkin);
+                    CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMesh->BodyPartSkeletalMesh, EBodyPartType::BodySkin);
+                	UE_LOG(LogTemp, Warning, TEXT("Current skin flags: %s"), *CollectedNewContextData.SkinVisibilityFlags.UpdateDescription());
+                }
 
-                        // Step 10: Reset unused BodyPart skeletals (different somatotypes may have variation in body parts set)
-                        for (const auto& [PartType, Skeletal] : Skeletals)
-                        {
-                            if (!UsedPartTypes.Contains(PartType) && Skeletal->GetSkeletalMeshAsset())
-                            {
-                                CustomizationUtilities::SetSkeletalMesh(this, nullptr, Skeletal);
-                                //TODO:: log
-                            }
-                        }
+                // Step 10: Reset unused BodyPart skeletals (different somatotypes may have variation in body parts set)
+                for (const auto& [PartType, Skeletal] : Skeletals)
+                {
+                    if (!UsedPartTypes.Contains(PartType) && Skeletal->GetSkeletalMeshAsset())
+                    {
+                        CustomizationUtilities::SetSkeletalMesh(this, nullptr, Skeletal);
+                        //TODO:: log
+                    }
+                }
 
-                        // Step 11: Invalidate Skin
-                        PendingInvalidationCounter.Pop();
-                        Invalidate(true, ECustomizationInvalidationReason::Skin);
-                        OnSomatotypeLoaded.Broadcast(SomatotypeDataAsset);
-                    });
+                // Step 11: Invalidate Skin
+                PendingInvalidationCounter.Pop();
+                Invalidate(true, ECustomizationInvalidationReason::Skin);
+                OnSomatotypeLoaded.Broadcast(SomatotypeDataAsset);
+			});
 	});
 }
 

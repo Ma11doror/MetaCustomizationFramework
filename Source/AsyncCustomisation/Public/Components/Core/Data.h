@@ -59,7 +59,7 @@ struct FSkinFlagCombination
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(Bitmask, BitmaskEnum="/Script/AsyncCustomisation.ESkinVisibilityFlag"))
 	int32 FlagMask = 0;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+	UPROPERTY()
 	FString FlagDescription;
 
 	FSkinFlagCombination() : FlagMask(0), FlagDescription(TEXT("None"))
@@ -167,7 +167,7 @@ struct FSkinFlagCombination
 		}
 	}
 
-	void UpdateDescription()
+	const FString& UpdateDescription()
 	{
 		TArray<FString> ActiveFeatures;
 
@@ -188,7 +188,7 @@ struct FSkinFlagCombination
 		if ((FlagMask & (int32)ESkinVisibilityFlag::Hip) != 0)
 			ActiveFeatures.Add(TEXT("Hip"));
 		if ((FlagMask & (int32)ESkinVisibilityFlag::Feet) != 0)
-			ActiveFeatures.Add(TEXT("Hip"));
+			ActiveFeatures.Add(TEXT("Feet"));
 
 
 		if (ActiveFeatures.Num() > 0)
@@ -199,6 +199,7 @@ struct FSkinFlagCombination
 		{
 			FlagDescription = TEXT("None");
 		}
+		return FlagDescription;
 	}
 
 	void AddFlag(ESkinVisibilityFlag InFlagMask)
