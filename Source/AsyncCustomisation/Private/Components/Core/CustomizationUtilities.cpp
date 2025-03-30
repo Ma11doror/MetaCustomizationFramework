@@ -22,7 +22,7 @@ void CustomizationUtilities::SetSkeletalMesh(
 		// TODO:: log
 		TargetSkeletalMeshComponent->SetSkeletalMesh(nullptr);
 	}
-	UE_LOG(LogTemp, Display, TEXT("CustomizationUtilities::SetSkeletalMesh:  %s"), *SourceSkeletalMesh->GetPathName());
+	UE_LOG(LogTemp, Display, TEXT("Utils : SetSkeletalMesh:  %s to target %s "), *SourceSkeletalMesh->GetPathName(), *TargetSkeletalMeshComponent->GetPathName());
 	SetSkeletalMeshAssetWithMaterials(TargetSkeletalMeshComponent, SourceSkeletalMesh);
 
 	ABaseCharacter* OwningCharacter = Self->GetOwningCharacter();

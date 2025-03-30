@@ -245,5 +245,6 @@ struct FSkinFlagCombination
 	void ClearAllFlags()
 	{
 		FlagMask = 0;
+		FlagDescription = {};
 	}
 };

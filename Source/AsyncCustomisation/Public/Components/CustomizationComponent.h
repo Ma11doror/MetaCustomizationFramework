@@ -74,7 +74,32 @@ protected:
 
 	void StartInvalidationTimer();
 	void CreateTimerIfNeeded();
+
+
+	void ResetUnusedBodyParts(TSet<EBodyPartType>& InUsedPartTypes);
 	
+	void ApplyBodySkin(USomatotypeDataAsset* SomatotypeDataAsset,
+	                   TSet<EBodyPartType>& InUsedPartTypes);
+	
+	void ApplyDefaultBodyParts(USomatotypeDataAsset* SomatotypeDataAsset,
+	                           const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
+	                           TSet<EBodyPartType>& InUsedPartTypes);
+	
+	void ProcessAddedBodyParts(const TSet<FName>& AddedSlugs,
+	                           const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
+	                           const TMap<FName, UBodyPartAsset*>& SlugToAsset);
+	
+	void ProcessRemovedBodyParts(const TSet<FName>& RemovedSlugs, const TMap<FName, EBodyPartType>& SlugToType,
+	                             const TArray<FPrimaryAssetId>& IncludeOldEquippedItemAssetIds,
+	                             const TMap<FName, UBodyPartAsset*>& SlugToAsset);
+	
+	void LoadAndProcessBodyParts(USomatotypeDataAsset* SomatotypeDataAsset,
+	                             const TSet<FName>& AddedSlugs,
+	                             const TSet<FName>& RemovedSlugs,
+	                             const TMap<FName, EBodyPartType>& SlugToType,
+	                             const TArray<FPrimaryAssetId>& ItemRelatedBodyPartAssetIds, const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
+	                             const TArray<FPrimaryAssetId>& IncludeOldEquippedItemAssetIds);
+
 	TStrongObjectPtr<UTimerComponent> InvalidationTimer = nullptr;
 	
 	FCustomizationContextData CollectedNewContextData;
