@@ -24,7 +24,7 @@ public:
 	FMaterialCustomizationCollection MaterialAsset;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	TSoftObjectPtr<UMaterialInterface> CustomFeathersMaterial = nullptr;
+	TSoftObjectPtr<UMaterialInterface> CustomMaterial = nullptr;
 
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
 };

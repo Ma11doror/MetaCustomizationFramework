@@ -14,3 +14,11 @@ void AExampleGameMode::EquipSomething(ABaseCharacter* Player, const TArray<FName
 	
 	Cast<ABaseCharacter>(Player)->CustomizationComponent->EquipItems(Items);
 }
+
+void AExampleGameMode::UnequipSomething(ABaseCharacter* Player, const FName& Items)
+{
+	if(!Player) { return; }
+	if(Items.IsNone()) { return; }
+	
+	Cast<ABaseCharacter>(Player)->CustomizationComponent->UnequipItem(Items);
+}

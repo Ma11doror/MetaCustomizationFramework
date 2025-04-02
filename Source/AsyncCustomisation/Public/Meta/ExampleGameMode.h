@@ -15,4 +15,7 @@ class ASYNCCUSTOMISATION_API AExampleGameMode : public AGameMode
 
 	UFUNCTION(BlueprintCallable)
 	void EquipSomething(ABaseCharacter* Player, const TArray<FName>& Items);
+	
+	UFUNCTION(BlueprintCallable)
+	void UnequipSomething(ABaseCharacter* Player, const FName& Items);
 };

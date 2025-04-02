@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Constants/GlobalConstants.h"
 #include "Data.generated.h"
 
 UENUM(BlueprintType)
@@ -246,5 +247,54 @@ struct FSkinFlagCombination
 	{
 		FlagMask = 0;
 		FlagDescription = {};
+	}
+	
+	FString ToString()
+	{
+		TArray<FString> ActiveFeatures;
+		
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Wrist) != 0)
+			ActiveFeatures.Add(TEXT("Wrist"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Forearm) != 0)
+			ActiveFeatures.Add(TEXT("Forearm"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Elbow) != 0)
+			ActiveFeatures.Add(TEXT("Elbow"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Shoulder) != 0)
+			ActiveFeatures.Add(TEXT("Shoulder"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Torso) != 0)
+			ActiveFeatures.Add(TEXT("Torso"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Ankle) != 0)
+			ActiveFeatures.Add(TEXT("Ankle"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Knee) != 0)
+			ActiveFeatures.Add(TEXT("Knee"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Hip) != 0)
+			ActiveFeatures.Add(TEXT("Hip"));
+		if ((FlagMask & (int32)ESkinVisibilityFlag::Feet) != 0)
+			ActiveFeatures.Add(TEXT("Feet"));
+
+		FString Result = FString::Printf(TEXT("Flags (Mask: %d):\n"), FlagMask);
+		if (ActiveFeatures.Num() > 0)
+		{
+			for (int32 i = 0; i < ActiveFeatures.Num(); ++i)
+			{
+				Result += ActiveFeatures[i];
+				if (i < ActiveFeatures.Num() - 1)
+				{
+					Result += TEXT(", ");
+				}
+
+				// Add a newline after every 3 flags (or after the last flag)
+				if ((i + 1) % 3 == 0 || i == ActiveFeatures.Num() - 1)
+				{
+					Result += TEXT("\n");
+				}
+			}
+		}
+		else
+		{
+			Result += GLOBAL_CONSTANTS::NONE_STRING;
+		}
+
+		return Result;
 	}
 };

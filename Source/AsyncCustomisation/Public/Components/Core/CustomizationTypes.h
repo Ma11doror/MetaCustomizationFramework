@@ -17,6 +17,32 @@ struct FEquippedItemActorsInfo
 
 	bool operator==(const FEquippedItemActorsInfo& Other) const { return this->ItemSlug == Other.ItemSlug; }
 	bool operator!=(const FEquippedItemActorsInfo& Other) const { return !(*this == Other); }
+
+	FString ToString() const
+	{
+		FString ActorNames;
+		for (int32 i = 0; i < ItemRelatedActors.Num(); ++i)
+		{
+			if (ItemRelatedActors[i].IsValid() && ItemRelatedActors[i]->IsValidLowLevel())
+			{
+				ActorNames += ItemRelatedActors[i]->GetName();
+				if (i < ItemRelatedActors.Num() - 1)
+				{
+					ActorNames += ", ";
+				}
+			}
+			else
+			{
+				ActorNames += "Invalid Actor";
+				if (i < ItemRelatedActors.Num() - 1)
+				{
+					ActorNames += ", ";
+				}
+			}
+		}
+
+		return FString::Printf(TEXT("ItemSlug: %s, Actors: [%s]"), *ItemSlug.ToString(), *ActorNames);
+	}
 };
 
 USTRUCT()
@@ -28,6 +54,16 @@ struct FEquippedItemsInSlotInfo
 
 	bool operator==(const FEquippedItemsInSlotInfo& Other) const { return this->EquippedItemActors == Other.EquippedItemActors; }
 	bool operator!=(const FEquippedItemsInSlotInfo& Other) const { return !(*this == Other); }
+	
+	FString ToString() const
+	{
+		FString Result = "Equipped Items:\n";
+		for (int32 i = 0; i < EquippedItemActors.Num(); ++i)
+		{
+			Result += FString::Printf(TEXT("  Item %d: %s\n"), i + 1, *EquippedItemActors[i].ToString());
+		}
+		return Result;
+	}
 };
 
 USTRUCT()
@@ -36,7 +72,20 @@ struct FCharacterVFXCustomization
 	GENERATED_BODY()
 
 	UPROPERTY()
-	TSoftObjectPtr<UMaterialInterface> CustomFeatherMaterial = nullptr;
+	TSoftObjectPtr<UMaterialInterface> CustomMaterial = nullptr;
+
+	FString ToString() const
+	{
+		if (CustomMaterial.IsNull())
+		{
+			return "CustomMaterial: None";
+		}
+		else
+		{
+			FString AssetPath = CustomMaterial.ToSoftObjectPath().ToString();
+			return FString::Printf(TEXT("CustomMaterial: %s"), *AssetPath);
+		}
+	}
 };
 
 USTRUCT()
@@ -50,9 +99,6 @@ struct FCustomizationContextData
 public:
 	// [Body] Type of body. Base type of skeletal
 	ESomatotype Somatotype = ESomatotype::None;
-	
-	//[Material] Materials
-	FName EquippedMaterialSlug = NAME_None;
 	
 	//[Materials by slot] <Slug, BodyTartType>
 	TMap<FName, EBodyPartType> EquippedMaterialsMap{};
@@ -68,19 +114,23 @@ public:
 	
 	//[Skin] VFX customization
 	FCharacterVFXCustomization VFXCustomization = {};
-
-	TArray<FName> GetEquippedSlugs()
+	
+	TArray<FName> GetEquippedSlugs() const
 	{
-		TArray<FName> Slugs{};
-		if (EquippedMaterialSlug != NAME_None)
+		TArray<FName> Slugs;
+
+		// Add material slugs from EquippedMaterialsMap
+		for (const auto& [MaterialSlug, BodyPartType] : EquippedMaterialsMap)
 		{
-			Slugs.Add(EquippedMaterialSlug);
+			Slugs.Add(MaterialSlug);
 		}
 
+		// Add body part slugs
 		TArray<FName> ItemBodyPartSlugs;
 		EquippedBodyPartsItems.GenerateKeyArray(ItemBodyPartSlugs);
 		Slugs.Append(MoveTempIfPossible(ItemBodyPartSlugs));
 
+		// Add item slugs from EquippedCustomizationItemActors
 		for (const auto& [SlotType, ActorsInSlot] : EquippedCustomizationItemActors)
 		{
 			for (const auto& ActorsInfo : ActorsInSlot.EquippedItemActors)
@@ -91,7 +141,7 @@ public:
 
 		return Slugs;
 	}
-
+	
 	void ReplaceOrAddSpawnedActors(const FName& ItemSlug, ECustomizationSlotType SlotType, const TArray<TStrongObjectPtr<AActor>>& Actors)
 	{
 		TArray<FEquippedItemActorsInfo>& ActorsInSlot = EquippedCustomizationItemActors.FindOrAdd(SlotType).EquippedItemActors;
@@ -105,6 +155,29 @@ public:
 			ActorsInSlot.Add({ ItemSlug, Actors });
 		}
 	}
+
+	// TODO:: template function for text getters
+	FString GetActorsList()
+	{
+		FString ActorsList;
+		for (auto Actor : EquippedCustomizationItemActors)
+		{
+			ActorsList += UEnum::GetValueAsString(Actor.Key) + Actor.Value.ToString() + TEXT(" \n");
+		}
+		return ActorsList;
+	}
+
+	FString GetItemsList()
+	{
+		FString IterList;
+		for (auto Iter : EquippedBodyPartsItems)
+		{
+			IterList.Append(Iter.Key.ToString() + UEnum::GetValueAsString(Iter.Value)  + TEXT(" \n"));
+		}
+		return IterList;
+	}
+
+	
 };
 
 UENUM()
@@ -243,7 +316,7 @@ void CheckDiff(const FCustomizationContextData& New)
 	Added = FCustomizationContextData();
 	Removed = FCustomizationContextData();
 
-	// Compare EquippedBodyPartsItems using TSet for efficient comparison
+	// Compare EquippedBodyPartsItems 
 	TSet<FName> CurrentSlugs;
 	TSet<FName> NewSlugs;
 

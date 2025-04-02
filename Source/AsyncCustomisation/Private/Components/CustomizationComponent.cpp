@@ -6,6 +6,8 @@
 #include "AsyncCustomisation/Public/Utilities/CommonUtilities.h"
 #include "Components/Core/CustomizationItemBase.h"
 #include "Components/Core/Assets/SomatotypeDataAsset.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "Utilities/CustomizationSettings.h"
 #include "Utilities/MetaGameLib.h"
 
 
@@ -75,7 +77,7 @@ void UCustomizationComponent::EquipItem(const FName& ItemSlug)
 	else if (CustomizationAssetClass == UMaterialPackCustomizationDA::StaticClass()
 		|| CustomizationAssetClass == UMaterialCustomizationDataAsset::StaticClass())
 	{
-		CollectedNewContextData.EquippedBodyPartsItems.Add(ItemSlug, EBodyPartType::None);
+		CollectedNewContextData.EquippedMaterialsMap.Add(ItemSlug, EBodyPartType::None);
 	}
 	else if (CustomizationAssetClass == UBodyPartAsset::StaticClass())
 	{
@@ -118,7 +120,6 @@ void UCustomizationComponent::UnequipItem(const FName& ItemSlug)
 	else if (CustomizationAssetClass == UMaterialPackCustomizationDA::StaticClass()
 		|| CustomizationAssetClass == UMaterialCustomizationDataAsset::StaticClass())
 	{
-		// Remove from EquippedMaterialsMap
 		CollectedNewContextData.EquippedMaterialsMap.Remove(ItemSlug);
 	}
 	else if (CustomizationAssetClass == UBodyPartAsset::StaticClass())
@@ -381,7 +382,7 @@ void UCustomizationComponent::InvalidateSkin()
 						}
 					}
 
-					CollectedNewContextData.VFXCustomization.CustomFeatherMaterial = InSkinAsset->CustomFeathersMaterial;
+					CollectedNewContextData.VFXCustomization.CustomMaterial = InSkinAsset->CustomMaterial;
 					PendingInvalidationCounter.Pop();
 				});
 		}
@@ -392,12 +393,16 @@ void UCustomizationComponent::InvalidateSkin()
 	PendingInvalidationCounter.Push();
 	ApplySkin(DefaultSkin, EBodyPartType::None);
 
+	DebugInfo.SkinInfo = FString{};
+	
 	// Apply equipped skins
 	for (const auto& [MaterialSlug, BodyPartType] : CollectedNewContextData.EquippedMaterialsMap)
 	{
 		FPrimaryAssetId SkinAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(MaterialSlug);
 		PendingInvalidationCounter.Push();
 		ApplySkin(SkinAssetId, BodyPartType);
+		
+		DebugInfo.SkinInfo.Append(SkinAssetId.ToString() + " " + UEnum::GetValueAsString(BodyPartType) + "\n");
 	}
 	PendingInvalidationCounter.Pop();
 }
@@ -429,7 +434,7 @@ void UCustomizationComponent::InvalidateBodyParts()
         TSet<FName> RemovedSlugs;
         TMap<FName, EBodyPartType> SlugToType;  // Used for both Added and Current
         TArray<FPrimaryAssetId> ItemRelatedBodyPartAssetIds;
-        TArray<FPrimaryAssetId> EquippedItemAssetIds = CommonUtilities::ItemSlugsToAssetIds(CollectedNewContextData.GetEquippedSlugs());
+        const TArray<FPrimaryAssetId> EquippedItemAssetIds = CommonUtilities::ItemSlugsToAssetIds(CollectedNewContextData.GetEquippedSlugs());
         TArray<FPrimaryAssetId> IncludeOldEquippedItemAssetIds = CommonUtilities::ItemSlugsToAssetIds(InvalidationContext.Current.GetEquippedSlugs());
         IncludeOldEquippedItemAssetIds.Append(EquippedItemAssetIds);
     	
@@ -493,6 +498,7 @@ void UCustomizationComponent::LoadAndProcessBodyParts(USomatotypeDataAsset* Soma
 			// 8. Reset unused body parts
 			ResetUnusedBodyParts(UsedPartTypes);
 
+			DebugInfo.EquippedItems = InvalidationContext.Current.GetItemsList();
 			// 9. Update skin and broadcast
 			PendingInvalidationCounter.Pop();
 			Invalidate(true, ECustomizationInvalidationReason::Skin);
@@ -539,30 +545,22 @@ void UCustomizationComponent::ProcessAddedBodyParts(const TSet<FName>& AddedSlug
 		FBodyPartVariant* ItemBodyPartVariant = ItemRelatedBodyPart->GetMatchedVariant(EquippedItemAssetIds);
 
 		if (!ItemBodyPartVariant || !ItemBodyPartVariant->IsValid()) continue;
-
-		EBodyPartType RealPartType = ItemBodyPartVariant->BodyPartType;
-
+		
 		// Remove skin for this slot or material from old body part will be appltied to new item
-		// 
-		FName* ExistingMaterialSlugPtr = nullptr;
-		for(auto& [MaterialSlug, BodyPartType] : CollectedNewContextData.EquippedMaterialsMap)
+		EBodyPartType EquippedPartType = ItemBodyPartVariant->BodyPartType;
+		for(auto It = CollectedNewContextData.EquippedMaterialsMap.CreateIterator(); It; ++It)
 		{
-			if(BodyPartType == RealPartType)
+			if(It.Value() == EquippedPartType)
 			{
-				ExistingMaterialSlugPtr = &MaterialSlug;
+				CollectedNewContextData.EquippedMaterialsMap.Remove(It.Key());
 				break;
 			}
-		}
-		if(ExistingMaterialSlugPtr)
-		{
-			CollectedNewContextData.EquippedMaterialsMap.Remove(*ExistingMaterialSlugPtr);
-			// TODO:: Invalidate Skin?
 		}
 
 		// Check for conflicts (replace existing parts of the same type)
 		for (auto& [ExistingSlug, ExistingType] : CollectedNewContextData.EquippedBodyPartsItems)
 		{
-			if (ExistingType == RealPartType && ExistingSlug != ItemSlug)
+			if (ExistingType == EquippedPartType && ExistingSlug != ItemSlug)
 			{
 				UE_LOG(LogTemp, Warning, TEXT("Conflict detected: Replacing %s (type %s) with %s"), *ExistingSlug.ToString(), *UEnum::GetValueAsString(ExistingType), *ItemSlug.ToString());
 
@@ -575,14 +573,14 @@ void UCustomizationComponent::ProcessAddedBodyParts(const TSet<FName>& AddedSlug
 		}
 
 		// Apply the new body part
-		CustomizationUtilities::SetBodyPartSkeletalMesh(this, ItemBodyPartVariant->BodyPartSkeletalMesh, RealPartType);
+		CustomizationUtilities::SetBodyPartSkeletalMesh(this, ItemBodyPartVariant->BodyPartSkeletalMesh, EquippedPartType);
 
 		// Update context
 		CollectedNewContextData.SkinVisibilityFlags.AddFlag(ItemBodyPartVariant->SkinCoverageFlags.FlagMask);
-		CollectedNewContextData.EquippedBodyPartsItems.Add(ItemSlug, RealPartType);
-		InvalidationContext.Current.EquippedBodyPartsItems.Add(ItemSlug, RealPartType);
+		CollectedNewContextData.EquippedBodyPartsItems.Add(ItemSlug, EquippedPartType);
+		InvalidationContext.Current.EquippedBodyPartsItems.Add(ItemSlug, EquippedPartType);
 
-		UE_LOG(LogTemp, Warning, TEXT("Adding Item: %s, Type: %s"), *ItemSlug.ToString(), *UEnum::GetValueAsString(RealPartType));
+		UE_LOG(LogTemp, Warning, TEXT("Adding Item: %s, Type: %s"), *ItemSlug.ToString(), *UEnum::GetValueAsString(EquippedPartType));
 	}
 }
 
@@ -643,7 +641,7 @@ void UCustomizationComponent::ApplyBodySkin(USomatotypeDataAsset* SomatotypeData
 	{
 		InUsedPartTypes.Emplace(EBodyPartType::BodySkin);
 		CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMesh->BodyPartSkeletalMesh, EBodyPartType::BodySkin);
-		UE_LOG(LogTemp, Warning, TEXT("Current skin flags: %s"), *CollectedNewContextData.SkinVisibilityFlags.UpdateDescription());
+		DebugInfo.SkinCoverage = DebugInfo.FormatData(CollectedNewContextData.SkinVisibilityFlags);
 	}
 }
 
@@ -761,6 +759,7 @@ void UCustomizationComponent::InvalidateAttachedActors()
 				 * Because we operate with id's first, but didn't have actor's info
 				 */
 				InvalidationContext.Current.ReplaceOrAddSpawnedActors(ItemSlug, SlotType, Spawned);
+				DebugInfo.ActorInfo = InvalidationContext.Current.GetActorsList();
 			}
 
 			// Step 5: Invalidate Skin
@@ -800,6 +799,16 @@ void UCustomizationComponent::BeginPlay()
 	{
 		UpdateFromOwning();
 	}
+
+#if WITH_EDITOR
+	if (UCustomizationSettings::Get()->GetEnableDebug())
+	{
+		GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+		{
+			UpdateDebugInfo();
+		},0.1f, true, 0.f);
+	}
+#endif
 }
 
 void UCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -811,4 +820,38 @@ void UCustomizationComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		InvalidationTimer = nullptr;
 	}
 	Super::EndPlay(EndPlayReason);
+}
+
+void UCustomizationComponent::UpdateDebugInfo()
+{
+	if (!UCustomizationSettings::Get()->GetEnableDebug()) return;
+
+	if (!OwningCharacter.IsValid()) return;
+	
+	const FVector CharacterLocation = OwningCharacter->GetMesh()->GetComponentLocation();
+	//DrawDebugPoint(GetWorld(), CharacterLocation, 5.f, FColor::White, true, 0.1f, false);
+
+	const FVector PendingItemsLocation	= CharacterLocation + FVector(0, 0, DebugInfo.VerticalOffset);																	// Left
+	const FVector SkinCoverageLocation	= CharacterLocation + FVector(DebugInfo.HorizontalOffset, 0, DebugInfo.VerticalOffset);										// Above
+	const FVector EquippedItemsLocation = CharacterLocation + FVector(DebugInfo.HorizontalOffset * 2, 0, DebugInfo.VerticalOffset);										// Right
+	const FVector SkinInfoLocation		= CharacterLocation + FVector(0, 0, DebugInfo.VerticalOffset - DebugInfo.OffsetForSecondLine);									// Left, below 
+	const FVector ActorInfoLocation		= CharacterLocation + FVector(DebugInfo.HorizontalOffset * 2, 0, DebugInfo.VerticalOffset - DebugInfo.OffsetForSecondLine);		// Right, below
+	
+	DrawDebugTextBlock(PendingItemsLocation, DebugInfo.GetBlockText("Pending Items", DebugInfo.PendingItems), OwningCharacter.Get(), FColor::Turquoise);
+	DrawDebugTextBlock(SkinCoverageLocation, DebugInfo.GetBlockText("Skin Coverage", DebugInfo.SkinCoverage), OwningCharacter.Get(), FColor::Green);
+	DrawDebugTextBlock(EquippedItemsLocation, DebugInfo.GetBlockText("Equipped Items", DebugInfo.EquippedItems), OwningCharacter.Get(), FColor::Yellow);
+	DrawDebugTextBlock(ActorInfoLocation, DebugInfo.GetBlockText("Actor Info", DebugInfo.ActorInfo), OwningCharacter.Get(), FColor::Orange);
+	DrawDebugTextBlock(SkinInfoLocation, DebugInfo.GetBlockText("Skin Info", DebugInfo.SkinInfo), OwningCharacter.Get(), FColor::Purple);
+}
+
+void UCustomizationComponent::DrawDebugTextBlock(const FVector& Location, const FString& Text, AActor* OwningActor, const FColor& Color)
+{
+	UKismetSystemLibrary::DrawDebugString(
+		GetWorld(),
+		Location,
+		Text,
+		OwningActor,
+		Color,
+		0.1f
+	);
 }
