@@ -299,6 +299,7 @@ private:
 	{
 		for (const auto& AssetId : AssetIds)
 		{
+			UE_LOG(LogTemp, Display, TEXT("LoadPrimaryAsset: AssetId: %s"), *AssetId.ToString());
 			LoadPrimaryAsset<UPrimaryDataAsset>(AssetId);
 		}
 		Callback();

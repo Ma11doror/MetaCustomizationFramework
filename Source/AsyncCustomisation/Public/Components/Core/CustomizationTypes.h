@@ -7,6 +7,8 @@
 #include "UObject/StrongObjectPtr.h"
 #include "CustomizationTypes.generated.h"
 
+struct FEquippedItemsInSlotInfo;
+
 USTRUCT()
 struct FEquippedItemActorsInfo
 {
@@ -45,6 +47,11 @@ struct FEquippedItemActorsInfo
 	}
 };
 
+bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS);
+bool operator!=(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS);
+bool operator==(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
+bool operator!=(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
+
 USTRUCT()
 struct FEquippedItemsInSlotInfo
 {
@@ -73,7 +80,18 @@ struct FCharacterVFXCustomization
 
 	UPROPERTY()
 	TSoftObjectPtr<UMaterialInterface> CustomMaterial = nullptr;
+	
+	bool operator==(const FCharacterVFXCustomization& Other) const
+	{
+		return CustomMaterial == Other.CustomMaterial;
+	}
 
+	
+	bool operator!=(const FCharacterVFXCustomization& Other) const
+	{
+		return !(*this == Other);
+	}
+	
 	FString ToString() const
 	{
 		if (CustomMaterial.IsNull())
@@ -141,6 +159,22 @@ public:
 
 		return Slugs;
 	}
+
+	bool operator==(const FCustomizationContextData& Other) const
+	{
+		return Somatotype == Other.Somatotype &&
+			   EquippedMaterialsMap == Other.EquippedMaterialsMap &&
+			   EquippedBodyPartsItems == Other.EquippedBodyPartsItems &&
+			   EquippedCustomizationItemActors == Other.EquippedCustomizationItemActors &&
+			   SkinVisibilityFlags == Other.SkinVisibilityFlags && // Assumes FSkinFlagCombination has operator==
+			   VFXCustomization == Other.VFXCustomization;
+	}
+
+	bool operator!=(const FCustomizationContextData& Other) const
+	{
+		return !(*this == Other);
+	}
+
 	
 	void ReplaceOrAddSpawnedActors(const FName& ItemSlug, ECustomizationSlotType SlotType, const TArray<TStrongObjectPtr<AActor>>& Actors)
 	{
@@ -157,7 +191,7 @@ public:
 	}
 
 	// TODO:: template function for text getters
-	FString GetActorsList()
+	FString GetActorsList() const
 	{
 		FString ActorsList;
 		for (auto Actor : EquippedCustomizationItemActors)
@@ -167,7 +201,7 @@ public:
 		return ActorsList;
 	}
 
-	FString GetItemsList()
+	FString GetItemsList() const
 	{
 		FString IterList;
 		for (auto Iter : EquippedBodyPartsItems)
@@ -194,12 +228,6 @@ enum class ECustomizationInvalidationReason : uint8
 ENUM_CLASS_FLAGS(ECustomizationInvalidationReason);
 ENUM_RANGE_BY_FIRST_AND_LAST(
 	ECustomizationInvalidationReason, ECustomizationInvalidationReason::None, ECustomizationInvalidationReason::All)
-
-bool operator==(const TMap<FName, EBodyPartType>& Map, const TMap<FName, EBodyPartType>& RHS);
-bool operator!=(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS);
-bool operator==(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
-bool operator!=(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
-
 
 inline bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS)
 {

@@ -32,7 +32,7 @@ enum class EItemType : uint8
 
 ENUM_RANGE_BY_FIRST_AND_LAST(EItemType, EItemType::Body, EItemType::Chain)
 
-// actually now it's skin coverage flag
+// actually now it's skin coverage flag, but renaming generate strange bugs
 UENUM(BlueprintType)
 enum class ESkinVisibilityFlag : uint8
 {

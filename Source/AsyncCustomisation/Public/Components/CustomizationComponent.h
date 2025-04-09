@@ -45,7 +45,7 @@ public:
 	void HardRefreshAll();
 
 	void SetCustomizationContext(const FCustomizationContextData& InContext);
-	const FCustomizationContextData& GetCustomizationContext();
+	const FCustomizationContextData& GetCurrentCustomizationState();
 
 	const TMap<EBodyPartType, USkeletalMeshComponent*>& GetSkeletals();
 
@@ -58,49 +58,43 @@ protected:
 	void ClearContext();
 
 	//Invalidation
-	void Invalidate(const bool bDeffer = true, ECustomizationInvalidationReason Reason = ECustomizationInvalidationReason::None );
+	void Invalidate(const FCustomizationContextData& TargetState,
+	                const bool bDeffer = true,
+	                ECustomizationInvalidationReason ExplicitReason = ECustomizationInvalidationReason::None);
 
 	//Deffer Invalidation context
 	ECustomizationInvalidationReason DefferReason = ECustomizationInvalidationReason::None;
+
+	// 
+	TOptional<FCustomizationContextData> DeferredTargetState;
 	
 	void OnDefferInvalidationTimerExpired();
 
 	//Allowed only to be called in Invalidate(...) method or other Invalidate*
-	void InvalidateSkin();
-	void InvalidateBodyParts();
-	void InvalidateAttachedActors();
+	void InvalidateSkin(FCustomizationContextData& TargetState);
+	void InvalidateBodyParts(FCustomizationContextData& TargetState);
+	void InvalidateAttachedActors(FCustomizationContextData& TargetState);
 
-	void StartInvalidationTimer();
+	void StartInvalidationTimer(const FCustomizationContextData& TargetState); 
 	void CreateTimerIfNeeded();
 
 
-	void ResetUnusedBodyParts(TSet<EBodyPartType>& InUsedPartTypes);
-	
-	void ApplyBodySkin(USomatotypeDataAsset* SomatotypeDataAsset,
-	                   TSet<EBodyPartType>& InUsedPartTypes);
-	
-	void ApplyDefaultBodyParts(USomatotypeDataAsset* SomatotypeDataAsset,
-	                           const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
-	                           TSet<EBodyPartType>& InUsedPartTypes);
-	
-	void ProcessAddedBodyParts(const TSet<FName>& AddedSlugs,
-	                           const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
-	                           const TMap<FName, UBodyPartAsset*>& SlugToAsset);
-	
-	void ProcessRemovedBodyParts(const TSet<FName>& RemovedSlugs, const TMap<FName, EBodyPartType>& SlugToType,
-	                             const TArray<FPrimaryAssetId>& IncludeOldEquippedItemAssetIds,
-	                             const TMap<FName, UBodyPartAsset*>& SlugToAsset);
-	
-	void LoadAndProcessBodyParts(USomatotypeDataAsset* SomatotypeDataAsset,
-	                             const TSet<FName>& AddedSlugs,
-	                             const TSet<FName>& RemovedSlugs,
-	                             const TMap<FName, EBodyPartType>& SlugToType,
-	                             const TArray<FPrimaryAssetId>& ItemRelatedBodyPartAssetIds, const TArray<FPrimaryAssetId>& EquippedItemAssetIds,
-	                             const TArray<FPrimaryAssetId>& IncludeOldEquippedItemAssetIds);
+	// Вспомогательные функции для InvalidateBodyParts (принимают TargetState для контекста)
+	void ResetUnusedBodyParts(const FCustomizationContextData& TargetState, const TSet<EBodyPartType>& FinalUsedPartTypes);
+
+	void ApplyBodySkin(const FCustomizationContextData& TargetState,
+	                   const USomatotypeDataAsset* SomatotypeDataAsset,
+	                   TSet<EBodyPartType>& FinalUsedPartTypes,
+	                   TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap);
+
+	void LoadAndProcessBodyParts(FCustomizationContextData& TargetState,
+	                             USomatotypeDataAsset* SomatotypeDataAsset,
+	                             TArray<FPrimaryAssetId>& AllRelevantItemAssetIds);
 
 	TStrongObjectPtr<UTimerComponent> InvalidationTimer = nullptr;
 	
-	FCustomizationContextData CollectedNewContextData;
+	UPROPERTY()
+	FCustomizationContextData CurrentCustomizationState;
 
 	UPROPERTY() /* Contains diff for Invalidation and current state*/
 	FCustomizationInvalidationContext InvalidationContext;
@@ -137,7 +131,7 @@ private:
 		FString ActorInfo;
 		FString SkinCoverage;
 
-		static FString GetBlockText(const FString& Title, const FString& Content)
+		static FString GetBlockText(const FString& Title, const FString& Content) 
 		{
 			FString BlockText = "-------------------\n";
 			BlockText += Title + ":\n";
