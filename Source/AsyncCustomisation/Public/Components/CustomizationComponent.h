@@ -79,7 +79,7 @@ protected:
 	void CreateTimerIfNeeded();
 
 
-	// Вспомогательные функции для InvalidateBodyParts (принимают TargetState для контекста)
+
 	void ResetUnusedBodyParts(const FCustomizationContextData& TargetState, const TSet<EBodyPartType>& FinalUsedPartTypes);
 
 	void ApplyBodySkin(const FCustomizationContextData& TargetState,

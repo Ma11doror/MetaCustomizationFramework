@@ -375,7 +375,7 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 {
 	 UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Skin based on TargetState..."));
 
-	auto ApplySkinToTarget = [this](UMaterialCustomizationDataAsset* MaterialCustomizationAsset, USkeletalMeshComponent* TargetMesh) // Работаем только с SkeletalMeshComponent частей тела
+	auto ApplySkinToTarget = [this](UMaterialCustomizationDataAsset* MaterialCustomizationAsset, USkeletalMeshComponent* TargetMesh)
 	{
 		if (MaterialCustomizationAsset && TargetMesh)
 		{
@@ -453,7 +453,6 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
     else
     {
         UE_LOG(LogCustomizationComponent, Warning, TEXT("No Default Skin found for Somatotype: %s"), *UEnum::GetValueAsString(TargetState.Somatotype));
-        // Возможно, нужно сбросить материалы на стандартные из мешей?
         for(auto const& [BodyPartType, SkeletalComp] : Skeletals)
         {
             if (SkeletalComp && SkeletalComp->GetSkeletalMeshAsset())
@@ -470,14 +469,14 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 	DebugInfo.SkinInfo = FString{};
 
 	// Apply equipped skins (TargetState)
-	for (const auto& [MaterialSlug, BodyPartType] : TargetState.EquippedMaterialsMap) // BodyPartType здесь не используется напрямую
+	for (const auto& [MaterialSlug, BodyPartType] : TargetState.EquippedMaterialsMap)
 	{
 		FPrimaryAssetId SkinAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(MaterialSlug);
         if (SkinAssetId.IsValid())
         {
         	PendingInvalidationCounter.Push();
 		    ApplySkin(SkinAssetId);
-		    DebugInfo.SkinInfo.Append(SkinAssetId.ToString() + "\n"); // Убрали BodyPartType отсюда
+		    DebugInfo.SkinInfo.Append(SkinAssetId.ToString() + "\n");
         }
 	}
     UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Skin."));
@@ -486,7 +485,7 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 void UCustomizationComponent::InvalidateBodyParts(FCustomizationContextData& TargetState)
 {
     UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Body Parts based on TargetState..."));
-    PendingInvalidationCounter.Push(); // Счетчик на всю функцию
+    PendingInvalidationCounter.Push();
 
     const auto AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager();
     if (!AssetManager) {
@@ -557,10 +556,10 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
                                                       TArray<FPrimaryAssetId>& AllRelevantItemAssetIds)
 {
 	UE_LOG(LogCustomizationComponent, Log, TEXT("Loading and Processing %d Body Part Assets for replacement logic..."), AllRelevantItemAssetIds.Num());
-	PendingInvalidationCounter.Push(); // Счетчик на загрузку ассетов
+	PendingInvalidationCounter.Push(); 
 
 	UCustomizationAssetManager::StaticSyncLoadAssetList<UBodyPartAsset>(AllRelevantItemAssetIds,
-		[this, &TargetState, SomatotypeDataAsset] // Захватываем TargetState по ссылке
+		[this, &TargetState, SomatotypeDataAsset]
 		(TArray<UBodyPartAsset*> LoadedBodyParts)
 		{
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Loaded %d Body Part Assets."), LoadedBodyParts.Num());
@@ -577,60 +576,54 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 			for (auto* BodyPartAsset : LoadedBodyParts) {
 				if (BodyPartAsset) SlugToAssetMap.Add(BodyPartAsset->GetPrimaryAssetId().PrimaryAssetName, BodyPartAsset);
 			}
+			
+			TMap<EBodyPartType, FName> FinalSlotAssignment; 
+			TMap<FName, const FBodyPartVariant*> AllValidVariants; 
 
-			// --- Шаг 1: Определяем финальное назначение слотов ---
-			TMap<EBodyPartType, FName> FinalSlotAssignment; // Карта: ТипЧастиТела -> Слаг Победителя
-			TMap<FName, const FBodyPartVariant*> AllValidVariants; // Кешируем найденные валидные варианты
 
-			// Сохраняем исходный список явно запрошенных слагов
 			TArray<FName> ExplicitlyRequestedSlugs;
 			TargetState.EquippedBodyPartsItems.GenerateKeyArray(ExplicitlyRequestedSlugs);
-
-			// Получаем AssetId для текущего *намерения* экипировки (из TargetState)
-            // Это важно для GetMatchedVariant, если варианты зависят от других экипированных предметов.
+			
 			TArray<FPrimaryAssetId> IntendedEquipmentAssetIds = CommonUtilities::ItemSlugsToAssetIds(TargetState.GetEquippedSlugs());
 
-			// Функция для поиска валидного варианта и его типа
 			auto GetVariantInfo = [&](const FName& Slug, EBodyPartType& OutType, const FBodyPartVariant*& OutVariant) -> bool {
 				if (const FBodyPartVariant** CachedVariant = AllValidVariants.Find(Slug))
                 {
-                    OutVariant = *CachedVariant; // Используем кеш, если есть
+                    OutVariant = *CachedVariant; 
                 }
                 else if (UBodyPartAsset** FoundAssetPtr = SlugToAssetMap.Find(Slug))
 				{
 					UBodyPartAsset* Asset = *FoundAssetPtr;
 					if (!Asset) return false;
-					// Используем IntendedEquipmentAssetIds для поиска варианта
+					
 					OutVariant = Asset->GetMatchedVariant(IntendedEquipmentAssetIds);
 					if (OutVariant && OutVariant->IsValid()) {
-                        AllValidVariants.Add(Slug, OutVariant); // Кешируем найденный вариант
+                        AllValidVariants.Add(Slug, OutVariant); 
 					} else {
-                        OutVariant = nullptr; // Невалидный вариант
+                        OutVariant = nullptr;
                     }
 				} else {
-                    OutVariant = nullptr; // Ассет не загружен
+                    OutVariant = nullptr; 
                 }
 
                 if(OutVariant) {
                     OutType = OutVariant->BodyPartType;
-                    return true; // Валидный вариант найден
+                    return true; 
                 } else {
                     OutType = EBodyPartType::None;
-                    return false; // Валидный вариант НЕ найден
+                    return false;
                 }
 			};
-
-			// Обрабатываем явно запрошенные предметы (из TargetState)
+			
 			for (const FName& Slug : ExplicitlyRequestedSlugs)
 			{
 				EBodyPartType ItemBodyPartType = EBodyPartType::None;
 				const FBodyPartVariant* ItemVariant = nullptr;
 
-				if (GetVariantInfo(Slug, ItemBodyPartType, ItemVariant)) // Нашли валидный вариант
+				if (GetVariantInfo(Slug, ItemBodyPartType, ItemVariant)) 
 				{
 					if (ItemBodyPartType != EBodyPartType::None)
 					{
-						// Этот предмет назначается на слот, заменяя любой предыдущий
 						FinalSlotAssignment.Add(ItemBodyPartType, Slug);
 						UE_LOG(LogCustomizationComponent, Verbose, TEXT("Assigning BodyPartType %s to explicit item '%s' (replacing previous if any)."),
 							*UEnum::GetValueAsString(ItemBodyPartType), *Slug.ToString());
@@ -644,7 +637,6 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				}
 			}
 
-			// Обрабатываем дефолтные предметы (из соматотипа)
 			for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
 			{
 				if (!BodyPartAssetPtr) continue;
@@ -653,11 +645,10 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				EBodyPartType ItemBodyPartType = EBodyPartType::None;
 				const FBodyPartVariant* ItemVariant = nullptr;
 
-				if (GetVariantInfo(DefaultSlug, ItemBodyPartType, ItemVariant)) // Нашли валидный вариант
+				if (GetVariantInfo(DefaultSlug, ItemBodyPartType, ItemVariant))
 				{
 					if (ItemBodyPartType != EBodyPartType::None)
 					{
-						// Назначаем дефолтный предмет, только если слот еще не занят явным предметом
 						if (!FinalSlotAssignment.Contains(ItemBodyPartType))
 						{
 							FinalSlotAssignment.Add(ItemBodyPartType, DefaultSlug);
@@ -670,12 +661,11 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				}
                 // else { UE_LOG(LogCustomizationComponent, Warning, TEXT("No valid variant found for default item '%s'."), *DefaultSlug.ToString()); }
 			}
-
-			// --- Шаг 2: Пересобираем TargetState.EquippedBodyPartsItems ---
-			TargetState.EquippedBodyPartsItems.Empty(); // Очищаем старую карту
-			TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap; // Для применения мешей
-			TSet<EBodyPartType> FinalUsedPartTypes;      // Для сброса неиспользуемых и скинов
-            TArray<FName> FinalActiveSlugs;           // Для применения мешей
+			
+			TargetState.EquippedBodyPartsItems.Empty();
+			TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap; 
+			TSet<EBodyPartType> FinalUsedPartTypes;     
+            TArray<FName> FinalActiveSlugs;
 
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Rebuilding TargetState based on final slot assignments..."));
 			for (const auto& Pair : FinalSlotAssignment)
@@ -683,12 +673,10 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				EBodyPartType BodyPartType = Pair.Key;
 				FName Slug = Pair.Value;
 
-				if (const FBodyPartVariant* const* FoundVariant = AllValidVariants.Find(Slug)) // Используем кеш вариантов
+				if (const FBodyPartVariant* const* FoundVariant = AllValidVariants.Find(Slug))
 				{
-					// Добавляем победителя в итоговое состояние с правильным типом
 					TargetState.EquippedBodyPartsItems.Add(Slug, BodyPartType);
 
-					// Собираем данные для применения мешей и скинов
 					FinalSlugToVariantMap.Add(Slug, *FoundVariant);
 					FinalUsedPartTypes.Add(BodyPartType);
                     FinalActiveSlugs.Add(Slug);
@@ -696,42 +684,33 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				}
                 else
                 {
-                    // Эта ситуация не должна возникать, если вариант был найден ранее
+                   
                     UE_LOG(LogCustomizationComponent, Error, TEXT("Could not find cached variant for final item '%s'. State might be incorrect."), *Slug.ToString());
                 }
 			}
-
-			// --- Шаг 3: Применяем скин тела ---
-			// Передаем FinalUsedPartTypes по ссылке, т.к. ApplyBodySkin может добавить EBodyPartType::BodySkin
+			
 			ApplyBodySkin(TargetState, SomatotypeDataAsset, FinalUsedPartTypes, FinalSlugToVariantMap);
-
-			// --- Шаг 4: Применяем меши частей тела победителей ---
+			
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Applying final body part meshes..."));
 			for (const FName& Slug : FinalActiveSlugs)
 			{
 				if (const FBodyPartVariant* const* FoundVariant = FinalSlugToVariantMap.Find(Slug))
 				{
-					// Тип берем из TargetState, который уже обновлен
+					
                     EBodyPartType PartType = TargetState.EquippedBodyPartsItems.FindChecked(Slug);
 					UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying mesh for BodyPart: %s (Type: %s)"), *Slug.ToString(), *UEnum::GetValueAsString(PartType));
 					CustomizationUtilities::SetBodyPartSkeletalMesh(this, (*FoundVariant)->BodyPartSkeletalMesh, PartType);
 				}
 			}
-
-			// --- 5: Сбрасываем неиспользуемые меши ---
-			// Используем FinalUsedPartTypes, который содержит все активные типы + возможно BodySkin
+			
 			ResetUnusedBodyParts(TargetState, FinalUsedPartTypes);
 
-			// --- 6: Обновление Debug Info и вызов InvalidateSkin ---
-			// DebugInfo читает из TargetState, который теперь корректен
 			DebugInfo.EquippedItems = TargetState.GetItemsList();
-
-			// InvalidateSkin вызывается с TargetState, который теперь корректен
-			// Передаем по ссылке для единообразия, хотя InvalidateSkin может не модифицировать его.
+			
 			InvalidateSkin(TargetState);
 
 			OnSomatotypeLoaded.Broadcast(SomatotypeDataAsset);
-			PendingInvalidationCounter.Pop(); // Pop для лямбды StaticSyncLoadAssetList
+			PendingInvalidationCounter.Pop();
 		});
 
 	// PendingInvalidationCounter.Pop(); 
@@ -777,7 +756,7 @@ void UCustomizationComponent::ResetUnusedBodyParts(const FCustomizationContextDa
 	UE_LOG(LogCustomizationComponent, Verbose, TEXT("Resetting unused body parts (not in FinalUsedPartTypes)..."));
 	for (const auto& [PartType, SkeletalComp] : Skeletals)
 	{
-		if (SkeletalComp && !FinalUsedPartTypes.Contains(PartType)) // Проверяем отсутствие в ИТОГОВОМ наборе
+		if (SkeletalComp && !FinalUsedPartTypes.Contains(PartType))
 		{
 			if (SkeletalComp->GetSkeletalMeshAsset() != nullptr)
 			{
@@ -791,10 +770,8 @@ void UCustomizationComponent::ResetUnusedBodyParts(const FCustomizationContextDa
 void UCustomizationComponent::InvalidateAttachedActors(FCustomizationContextData& TargetState)
 {
 	 UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Attached Actors based on TargetState..."));
-	PendingInvalidationCounter.Push(); // Счетчик на всю функцию
-
-	// --- Шаг 0: Определить акторы для удаления ---
-    // Сравниваем ключи (слоты) и значения (списки акторов по слага) между Current и Target
+	PendingInvalidationCounter.Push();
+	
     TMap<ECustomizationSlotType, TArray<FName>> SlugsToRemovePerSlot;
 
     for(const auto& CurrentPair : CurrentCustomizationState.EquippedCustomizationItemActors)
@@ -922,7 +899,7 @@ void UCustomizationComponent::InvalidateAttachedActors(FCustomizationContextData
     PendingInvalidationCounter.Push();
 
 	UCustomizationAssetManager::StaticSyncLoadAssetList<UCustomizationDataAsset>(
-		AddedOrUpdatedAssetIds, [this, TargetState, AssetIdToSlugMap, SlugToSlotMap](TArray<UCustomizationDataAsset*> LoadedAssets) // Захватываем TargetState и карты
+		AddedOrUpdatedAssetIds, [this, TargetState, AssetIdToSlugMap, SlugToSlotMap](TArray<UCustomizationDataAsset*> LoadedAssets) 
 		{
             UE_LOG(LogCustomizationComponent, Log, TEXT("Loaded %d assets for actor spawning."), LoadedAssets.Num());
 
@@ -936,14 +913,14 @@ void UCustomizationComponent::InvalidateAttachedActors(FCustomizationContextData
 
                 const FPrimaryAssetId CustomizationAssetId = CustomizationAsset->GetPrimaryAssetId();
 				const FName ItemSlug = AssetIdToSlugMap.FindChecked(CustomizationAssetId);
-                const ECustomizationSlotType SlotType = SlugToSlotMap.FindChecked(ItemSlug); // Получаем слот
+                const ECustomizationSlotType SlotType = SlugToSlotMap.FindChecked(ItemSlug);
 
 				UE_LOG(LogCustomizationComponent, Verbose, TEXT("Spawning actors for ItemSlug: %s in Slot: %s"), *ItemSlug.ToString(), *UEnum::GetValueAsString(SlotType));
 
 				TArray<TStrongObjectPtr<AActor>> SpawnedActorPtrs;
                 TArray<AActor*> SpawnedActorsRaw;
 
-				const auto& SuitableComplects = CustomizationAsset->CustomizationComplect; // Используем CustomizationComplect напрямую
+				const auto& SuitableComplects = CustomizationAsset->CustomizationComplect;
 				if (SuitableComplects.IsEmpty())
 				{
 					UE_LOG(LogCustomizationComponent, Warning, TEXT("No CustomizationComplect found in asset %s for item %s"), *CustomizationAssetId.ToString(), *ItemSlug.ToString());
@@ -1009,7 +986,7 @@ void UCustomizationComponent::InvalidateAttachedActors(FCustomizationContextData
                 UE_LOG(LogCustomizationComponent, Verbose, TEXT("Updated InvalidationContext.Current with spawned actors for %s"), *ItemSlug.ToString());
 			}
 			
-			DebugInfo.ActorInfo = InvalidationContext.Current.GetActorsList(); // Показываем состояние после спавна
+			DebugInfo.ActorInfo = InvalidationContext.Current.GetActorsList();
 			
 			PendingInvalidationCounter.Pop();
 		});
