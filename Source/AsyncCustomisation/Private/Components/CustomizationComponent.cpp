@@ -291,55 +291,61 @@ void UCustomizationComponent::Invalidate(const FCustomizationContextData& Target
 		if (DeferredTargetState.IsSet() && DeferredTargetState.GetValue() == TargetState) return;
 
 		EnumAddFlags(DefferReason, ExplicitReason);
-        DeferredTargetState = TargetState;
+		DeferredTargetState = TargetState;
 		StartInvalidationTimer(TargetState);
 		return;
 	}
-	FCustomizationContextData ModifiableTargetState  = TargetState;
-	
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Starting Immediate Invalidation..."));
+	FCustomizationContextData ModifiableTargetState = TargetState;
 
-    // 1. Get diff (CurrentCustomizationState) and (TargetState)
-    InvalidationContext.Current = CurrentCustomizationState;
-    InvalidationContext.CheckDiff(ModifiableTargetState);
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Starting Immediate Invalidation..."));
 
-    // 2. 
+	// 1. Get diff (CurrentCustomizationState) and (TargetState)
+	InvalidationContext.Current = CurrentCustomizationState;
+	InvalidationContext.CheckDiff(ModifiableTargetState);
+
+	// 2. Calculate final reason
 	ECustomizationInvalidationReason Reason = ExplicitReason;
 	EnumAddFlags(Reason, InvalidationContext.CalculateReason());
 
 	if (Reason == ECustomizationInvalidationReason::None)
 	{
 		UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidation skipped: No reason found."));
-         if (CurrentCustomizationState != TargetState)
-         {
-              CurrentCustomizationState = TargetState;
-         }
-        InvalidationContext.ClearTemporaryContext();
+		if (CurrentCustomizationState != TargetState)
+		{
+			UE_LOG(LogCustomizationComponent, Verbose, TEXT("Updating CurrentCustomizationState to TargetState without full invalidation as Reason is None."));
+			CurrentCustomizationState = TargetState;
+		}
+		InvalidationContext.ClearTemporaryContext();
 		DeferredTargetState.Reset();
 		return;
 	}
 
 	UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidation Reason: %s"), *StaticEnum<ECustomizationInvalidationReason>()->GetNameStringByValue(static_cast<int64>(Reason)));
 
-    // 3. 
+	// 3. Execute invalidation steps synchronously
 	if (EnumHasAnyFlags(Reason, ECustomizationInvalidationReason::Body))
 	{
 		PendingInvalidationCounter.Push();
-		InvalidateBodyParts(ModifiableTargetState); 
+		InvalidateBodyParts(ModifiableTargetState);
+		PendingInvalidationCounter.Pop();
+		// TODO: When InvalidateBodyParts becomes async, move this Pop() into its final completion callback.
 	}
 	if (EnumHasAnyFlags(Reason, ECustomizationInvalidationReason::Actors))
 	{
 		PendingInvalidationCounter.Push();
 		InvalidateAttachedActors(ModifiableTargetState);
+		PendingInvalidationCounter.Pop();
+		// TODO: When InvalidateAttachedActors becomes async, move this Pop() into its final completion callback.
 	}
 	if (EnumHasAnyFlags(Reason, ECustomizationInvalidationReason::Skin))
 	{
-		PendingInvalidationCounter.Push();
+		PendingInvalidationCounter.Push(); 
 		InvalidateSkin(ModifiableTargetState);
-
-		//TODO:: Check if it flow needed cz we call invalidate skin inside InvalidateBodyParts() 
+		PendingInvalidationCounter.Pop();
+		// TODO: When InvalidateSkin becomes async, move this Pop() into its final completion callback.
 	}
-	
+
+	// Log final state of body parts after potential modifications
 	FString MapStr;
 	for (const auto& Pair : ModifiableTargetState.EquippedBodyPartsItems)
 	{
@@ -347,14 +353,13 @@ void UCustomizationComponent::Invalidate(const FCustomizationContextData& Target
 	}
 	UE_LOG(LogCustomizationComponent, Log, TEXT("Target Body parts applied (final): %s"), *MapStr);
 
-    // 4. update current to target state after all invalidates
-    CurrentCustomizationState = TargetState;
-	
-	InvalidationContext.ClearTemporaryContext();
-	
-    DeferredTargetState.Reset();
+	// 4. update current to the potentially modified target state after all invalidates
 	CurrentCustomizationState = ModifiableTargetState;
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Immediate Invalidation Finished. Current state updated."));
+
+	InvalidationContext.ClearTemporaryContext();
+	DeferredTargetState.Reset();
+
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Immediate Invalidation Finished. Current state updated."));
 }
 
 void UCustomizationComponent::OnDefferInvalidationTimerExpired()
@@ -379,18 +384,18 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 	{
 		if (MaterialCustomizationAsset && TargetMesh)
 		{
-            UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying material %s to mesh %s"), *MaterialCustomizationAsset->GetPrimaryAssetId().ToString(), *TargetMesh->GetName());
+			UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying material %s to mesh %s"), *MaterialCustomizationAsset->GetPrimaryAssetId().ToString(), *TargetMesh->GetName());
 			CustomizationUtilities::SetMaterialOnMesh(MaterialCustomizationAsset, TargetMesh);
 		}
 	};
 
-	auto ApplySkin = [this, ApplySkinToTarget, &TargetState](const FPrimaryAssetId& InSkinAssetId)
+	auto ApplySkin = [this, ApplySkinToTarget](const FPrimaryAssetId& InSkinAssetId) mutable // Removed counter capture&usage
 	{
 		const FName SkinAssetTypeName = InSkinAssetId.PrimaryAssetType.GetName();
 		if (SkinAssetTypeName == GLOBAL_CONSTANTS::PrimaryMaterialCustomizationAssetType)
 		{
 			UCustomizationAssetManager::StaticSyncLoadAsset<UMaterialCustomizationDataAsset>(
-				InSkinAssetId, [this, ApplySkinToTarget, InSkinAssetId](UMaterialCustomizationDataAsset* MaterialCustomizationAsset)
+				InSkinAssetId, [this, ApplySkinToTarget, InSkinAssetId](UMaterialCustomizationDataAsset* MaterialCustomizationAsset) // Removed counter capture
 				{
 					if (MaterialCustomizationAsset && MaterialCustomizationAsset->bApplyOnBodyPart)
 					{
@@ -398,46 +403,44 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 						if (Skeletals.Contains(TargetBodyPartType))
 						{
 							if(USkeletalMeshComponent* TargetBodyPart = Skeletals[TargetBodyPartType])
-                            {
-							    ApplySkinToTarget(MaterialCustomizationAsset, TargetBodyPart);
-                            }
+							{
+								ApplySkinToTarget(MaterialCustomizationAsset, TargetBodyPart);
+							}
 						}
 					}
-                    else if (!MaterialCustomizationAsset)
-                    {
-                         UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load MaterialCustomizationDataAsset: %s"), *InSkinAssetId.ToString());
-                    }
+					else if (!MaterialCustomizationAsset)
+					{
+						UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load MaterialCustomizationDataAsset: %s"), *InSkinAssetId.ToString());
+					}
 				});
 		}
 		else if (SkinAssetTypeName == GLOBAL_CONSTANTS::PrimaryMaterialPackCustomizationAssetType)
 		{
 			UCustomizationAssetManager::StaticSyncLoadAsset<UMaterialPackCustomizationDA>(
-				InSkinAssetId, [this, ApplySkinToTarget, InSkinAssetId](UMaterialPackCustomizationDA* InSkinAsset)
+				InSkinAssetId, [this, ApplySkinToTarget, InSkinAssetId](UMaterialPackCustomizationDA* InSkinAsset) // Removed counter capture
 				{
 					if (InSkinAsset)
-                    {
-					    const auto& AssetCollection = InSkinAsset->MaterialAsset;
-					    for (const auto& MaterialCustomizationAsset : AssetCollection.MaterialCustomizations)
-					    {
-						    if (MaterialCustomizationAsset && MaterialCustomizationAsset->bApplyOnBodyPart)
-						    {
-							    const auto TargetBodyPartType = MaterialCustomizationAsset->BodyPartType;
-							    if (Skeletals.Contains(TargetBodyPartType))
-							    {
-                                    if(USkeletalMeshComponent* TargetBodyPart = Skeletals[TargetBodyPartType])
-                                    {
-								        ApplySkinToTarget(MaterialCustomizationAsset, TargetBodyPart);
-                                    }
-							    }
-						    }
-					    }
-                        // Update VFX in "current" state after invalidation
-                    }
-                    else
-                    {
-	                    UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load MaterialPackCustomizationDA: %s"), *InSkinAssetId.ToString());
-                    }
-					PendingInvalidationCounter.Pop(); 
+					{
+						const auto& AssetCollection = InSkinAsset->MaterialAsset;
+						for (const auto& MaterialCustomizationAsset : AssetCollection.MaterialCustomizations)
+						{
+							if (MaterialCustomizationAsset && MaterialCustomizationAsset->bApplyOnBodyPart)
+							{
+								const auto TargetBodyPartType = MaterialCustomizationAsset->BodyPartType;
+								if (Skeletals.Contains(TargetBodyPartType))
+								{
+									if(USkeletalMeshComponent* TargetBodyPart = Skeletals[TargetBodyPartType])
+									{
+										ApplySkinToTarget(MaterialCustomizationAsset, TargetBodyPart);
+									}
+								}
+							}
+						}
+					}
+					else
+					{
+						UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load MaterialPackCustomizationDA: %s"), *InSkinAssetId.ToString());
+					}
 				});
 		}
 	};
@@ -445,26 +448,30 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 	// --- InvalidateSkin ---
 	// Step 0: Apply default skin (TargetState)
 	const FPrimaryAssetId DefaultSkin = UMetaGameLib::GetDefaultSkinAssetIdBySomatotype(TargetState.Somatotype);
-    if (DefaultSkin.IsValid())
-    {
-    	PendingInvalidationCounter.Push();
-	    ApplySkin(DefaultSkin);
-    }
-    else
-    {
-        UE_LOG(LogCustomizationComponent, Warning, TEXT("No Default Skin found for Somatotype: %s"), *UEnum::GetValueAsString(TargetState.Somatotype));
-        for(auto const& [BodyPartType, SkeletalComp] : Skeletals)
-        {
-            if (SkeletalComp && SkeletalComp->GetSkeletalMeshAsset())
-            {
-                int32 NumMaterials = SkeletalComp->GetMaterials().Num();
-                for (int32 i = 0; i < NumMaterials; ++i)
-                {
-                     SkeletalComp->SetMaterial(i, SkeletalComp->GetSkeletalMeshAsset()->GetMaterials()[i].MaterialInterface);
-                }
-            }
-        }
-    }
+	if (DefaultSkin.IsValid())
+	{
+		ApplySkin(DefaultSkin);
+	}
+	else
+	{
+		UE_LOG(LogCustomizationComponent, Warning, TEXT("No Default Skin found for Somatotype: %s"), *UEnum::GetValueAsString(TargetState.Somatotype));
+		// Reset materials to default if no skin asset is found
+		for(auto const& [BodyPartType, SkeletalComp] : Skeletals)
+		{
+			if (SkeletalComp && SkeletalComp->GetSkeletalMeshAsset())
+			{
+				int32 NumMaterials = SkeletalComp->GetMaterials().Num();
+				const auto& DefaultMaterials = SkeletalComp->GetSkeletalMeshAsset()->GetMaterials();
+				for (int32 i = 0; i < NumMaterials; ++i)
+				{
+					 if (DefaultMaterials.IsValidIndex(i))
+					 {
+						 SkeletalComp->SetMaterial(i, DefaultMaterials[i].MaterialInterface);
+					 }
+				}
+			}
+		}
+	}
 
 	DebugInfo.SkinInfo = FString{};
 
@@ -472,155 +479,167 @@ void UCustomizationComponent::InvalidateSkin(FCustomizationContextData& TargetSt
 	for (const auto& [MaterialSlug, BodyPartType] : TargetState.EquippedMaterialsMap)
 	{
 		FPrimaryAssetId SkinAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(MaterialSlug);
-        if (SkinAssetId.IsValid())
-        {
-        	PendingInvalidationCounter.Push();
-		    ApplySkin(SkinAssetId);
-		    DebugInfo.SkinInfo.Append(SkinAssetId.ToString() + "\n");
-        }
+		if (SkinAssetId.IsValid())
+		{
+			ApplySkin(SkinAssetId);
+			DebugInfo.SkinInfo.Append(SkinAssetId.ToString() + "\n");
+		}
 	}
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Skin."));
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Skin."));
 }
 
 void UCustomizationComponent::InvalidateBodyParts(FCustomizationContextData& TargetState)
 {
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Body Parts based on TargetState..."));
-    PendingInvalidationCounter.Push();
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Body Parts based on TargetState..."));
 
-    const auto AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager();
-    if (!AssetManager) {
-         UE_LOG(LogCustomizationComponent, Error, TEXT("AssetManager is null!"));
-         PendingInvalidationCounter.Pop();
-         return;
-    }
+	const auto AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager();
+	if (!AssetManager) {
+		UE_LOG(LogCustomizationComponent, Error, TEXT("AssetManager is null!"));
+		return;
+	}
 
-    const FPrimaryAssetId SomatotypeAssetId = CustomizationUtilities::GetSomatotypeAssetId(TargetState.Somatotype);
-    if (!SomatotypeAssetId.IsValid())
+	const FPrimaryAssetId SomatotypeAssetId = CustomizationUtilities::GetSomatotypeAssetId(TargetState.Somatotype);
+	if (!SomatotypeAssetId.IsValid())
+	{
+		UE_LOG(LogCustomizationComponent, Warning, TEXT("Invalid Somatotype AssetId!"));
+		return;
+	}
+
+	AssetManager->SyncLoadAsset<USomatotypeDataAsset>(SomatotypeAssetId, [this, &TargetState](USomatotypeDataAsset* SomatotypeDataAsset) // Removed counter capture
+	{
+		if (!SomatotypeDataAsset)
+		{
+			UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load SomatotypeDataAsset!"));
+			return;
+		}
+		TSet<FPrimaryAssetId> RelevantAssetIdsSet;
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Building RelevantAssetIdsSet..."));
+
+		// 1. From Added
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Processing Added Items:"));
+		for (const auto& [Slug, PartType] : InvalidationContext.Added.EquippedBodyPartsItems)
+		{
+			FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(Slug);
+			UE_LOG(LogCustomizationComponent, Log, TEXT("  Slug: %s -> AssetId: %s"), *Slug.ToString(), *AssetId.ToString());
+			RelevantAssetIdsSet.Add(AssetId);
+		}
+
+		// 2. From Removed
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Processing Removed Items:"));
+		for (const auto& [Slug, PartType] : InvalidationContext.Removed.EquippedBodyPartsItems)
+		{
+			FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(Slug);
+			UE_LOG(LogCustomizationComponent, Log, TEXT("  Slug: %s -> AssetId: %s"), *Slug.ToString(), *AssetId.ToString());
+			RelevantAssetIdsSet.Add(AssetId);
+		}
+
+		// 3. From Target State
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Processing Target State Items:"));
+		for (const auto& [Slug, PartType] : TargetState.EquippedBodyPartsItems)
+		{
+			FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(Slug);
+			UE_LOG(LogCustomizationComponent, Log, TEXT("  Slug: %s -> AssetId: %s"), *Slug.ToString(), *AssetId.ToString());
+			RelevantAssetIdsSet.Add(AssetId);
+		}
+
+		// 4. From Somatotype Defaults
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Processing Somatotype Defaults:"));
+		for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
+		{
+			if (BodyPartAssetPtr)
     {
-        UE_LOG(LogCustomizationComponent, Warning, TEXT("Invalid Somatotype AssetId!"));
-        PendingInvalidationCounter.Pop();
-        return;
+         FPrimaryAssetId AssetId = BodyPartAssetPtr->GetPrimaryAssetId();
+         UE_LOG(LogCustomizationComponent, Log, TEXT("  Default Asset Ptr: %s -> AssetId: %s"), *BodyPartAssetPtr->GetName(), *AssetId.ToString()); 
+         RelevantAssetIdsSet.Add(AssetId);
     }
-
-    PendingInvalidationCounter.Push();
-    AssetManager->SyncLoadAsset<USomatotypeDataAsset>(SomatotypeAssetId, [this, &TargetState](USomatotypeDataAsset* SomatotypeDataAsset)
+    else
     {
-        if (!SomatotypeDataAsset) {
-            UE_LOG(LogCustomizationComponent, Warning, TEXT("Failed to load SomatotypeDataAsset!"));
-        	PendingInvalidationCounter.Pop(); 
-			PendingInvalidationCounter.Pop();
-            return;
-        }
+         UE_LOG(LogCustomizationComponent, Warning, TEXT("  Found nullptr in SomatotypeDataAsset->BodyParts")); 
+    }
+}
 
-        TSet<FPrimaryAssetId> RelevantAssetIdsSet;
-        TArray<FName> AddedSlugs;
-        TArray<FName> RemovedSlugs;
+TArray<FPrimaryAssetId> AllRelevantItemAssetIds = RelevantAssetIdsSet.Array();
+UE_LOG(LogCustomizationComponent, Log, TEXT("Final AllRelevantItemAssetIds size: %d"), AllRelevantItemAssetIds.Num());
 
-        // InvalidationContext
-        for (const auto& [Slug, PartType] : InvalidationContext.Added.EquippedBodyPartsItems)
-        {
-	        RelevantAssetIdsSet.Add(CommonUtilities::ItemSlugToCustomizationAssetId(Slug));
-	        AddedSlugs.Add(Slug);
-        }
-        // InvalidationContext
-        for (const auto& [Slug, PartType] : InvalidationContext.Removed.EquippedBodyPartsItems)
-        {
-	        RelevantAssetIdsSet.Add(CommonUtilities::ItemSlugToCustomizationAssetId(Slug));
-	        RemovedSlugs.Add(Slug);
-        }
-        // Default
-        for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
-        {
-	        if (BodyPartAssetPtr) RelevantAssetIdsSet.Add(BodyPartAssetPtr->GetPrimaryAssetId());
-        }
+		// Load and process body parts synchronously
+		LoadAndProcessBodyParts(TargetState, SomatotypeDataAsset, AllRelevantItemAssetIds);
+	});
 
-        for (const auto& [Slug, PartType] : TargetState.EquippedBodyPartsItems)
-        {
-	        RelevantAssetIdsSet.Add(CommonUtilities::ItemSlugToCustomizationAssetId(Slug));
-        }
-
-        TArray<FPrimaryAssetId> AllRelevantItemAssetIds = RelevantAssetIdsSet.Array();
-
-        //  IDs for target state
-        const TArray<FPrimaryAssetId> TargetEquippedItemAssetIds = CommonUtilities::ItemSlugsToAssetIds(TargetState.GetEquippedSlugs());
-    	
-        LoadAndProcessBodyParts(TargetState, SomatotypeDataAsset, AllRelevantItemAssetIds);
-    	PendingInvalidationCounter.Pop();
-    });
-	
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Body Parts."));
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Body Parts."));
 }
 
 void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData& TargetState,
-                                                      USomatotypeDataAsset* SomatotypeDataAsset,
-                                                      TArray<FPrimaryAssetId>& AllRelevantItemAssetIds)
+													  USomatotypeDataAsset* SomatotypeDataAsset,
+													  TArray<FPrimaryAssetId>& AllRelevantItemAssetIds)
 {
 	UE_LOG(LogCustomizationComponent, Log, TEXT("Loading and Processing %d Body Part Assets for replacement logic..."), AllRelevantItemAssetIds.Num());
-	PendingInvalidationCounter.Push(); 
 
+	// Since loading is sync, the lambda executes immediately 
+	// No Push() here
 	UCustomizationAssetManager::StaticSyncLoadAssetList<UBodyPartAsset>(AllRelevantItemAssetIds,
-		[this, &TargetState, SomatotypeDataAsset]
+		[this, &TargetState, SomatotypeDataAsset] // Removed counter capture
 		(TArray<UBodyPartAsset*> LoadedBodyParts)
 		{
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Loaded %d Body Part Assets."), LoadedBodyParts.Num());
 
 			if (!SomatotypeDataAsset) {
 				UE_LOG(LogCustomizationComponent, Error, TEXT("SomatotypeDataAsset is null during processing!"));
-				PendingInvalidationCounter.Pop(); // Pop for StaticSyncLoadAssetList lambda
-				// Removed second pop, assuming the outer function call (LoadAndProcessBodyParts) should handle its own pop if needed.
-				// Let's re-evaluate counter logic if issues arise.
 				return;
 			}
 
+			// --- Logic for determining final body parts (unchanged from original, just ensure no counter calls) ---
 			TMap<FName, UBodyPartAsset*> SlugToAssetMap;
 			for (auto* BodyPartAsset : LoadedBodyParts) {
 				if (BodyPartAsset) SlugToAssetMap.Add(BodyPartAsset->GetPrimaryAssetId().PrimaryAssetName, BodyPartAsset);
 			}
-			
-			TMap<EBodyPartType, FName> FinalSlotAssignment; 
-			TMap<FName, const FBodyPartVariant*> AllValidVariants; 
 
+			TMap<EBodyPartType, FName> FinalSlotAssignment;
+			TMap<FName, const FBodyPartVariant*> AllValidVariants; // Cache variants found
 
 			TArray<FName> ExplicitlyRequestedSlugs;
 			TargetState.EquippedBodyPartsItems.GenerateKeyArray(ExplicitlyRequestedSlugs);
-			
-			TArray<FPrimaryAssetId> IntendedEquipmentAssetIds = CommonUtilities::ItemSlugsToAssetIds(TargetState.GetEquippedSlugs());
+
+			// Get asset IDs intended for the final state to resolve variants correctly
+			const TArray<FPrimaryAssetId> IntendedEquipmentAssetIds = CommonUtilities::ItemSlugsToAssetIds(TargetState.GetEquippedSlugs());
 
 			auto GetVariantInfo = [&](const FName& Slug, EBodyPartType& OutType, const FBodyPartVariant*& OutVariant) -> bool {
+				// Check cache first
 				if (const FBodyPartVariant** CachedVariant = AllValidVariants.Find(Slug))
-                {
-                    OutVariant = *CachedVariant; 
-                }
-                else if (UBodyPartAsset** FoundAssetPtr = SlugToAssetMap.Find(Slug))
+				{
+					OutVariant = *CachedVariant;
+				}
+				// If not cached, find asset and resolve variant
+				else if (UBodyPartAsset** FoundAssetPtr = SlugToAssetMap.Find(Slug))
 				{
 					UBodyPartAsset* Asset = *FoundAssetPtr;
 					if (!Asset) return false;
-					
-					OutVariant = Asset->GetMatchedVariant(IntendedEquipmentAssetIds);
-					if (OutVariant && OutVariant->IsValid()) {
-                        AllValidVariants.Add(Slug, OutVariant); 
-					} else {
-                        OutVariant = nullptr;
-                    }
-				} else {
-                    OutVariant = nullptr; 
-                }
 
-                if(OutVariant) {
-                    OutType = OutVariant->BodyPartType;
-                    return true; 
-                } else {
-                    OutType = EBodyPartType::None;
-                    return false;
-                }
+					OutVariant = Asset->GetMatchedVariant(IntendedEquipmentAssetIds); // Use final intended equipment for matching
+					if (OutVariant && OutVariant->IsValid()) {
+						AllValidVariants.Add(Slug, OutVariant); // Cache the found variant
+					} else {
+						OutVariant = nullptr;
+					}
+				} else {
+					OutVariant = nullptr;
+				}
+
+				if(OutVariant) {
+					OutType = OutVariant->BodyPartType;
+					return true;
+				} else {
+					OutType = EBodyPartType::None;
+					return false;
+				}
 			};
-			
+
+			// Assign explicitly requested items first
 			for (const FName& Slug : ExplicitlyRequestedSlugs)
 			{
 				EBodyPartType ItemBodyPartType = EBodyPartType::None;
 				const FBodyPartVariant* ItemVariant = nullptr;
 
-				if (GetVariantInfo(Slug, ItemBodyPartType, ItemVariant)) 
+				if (GetVariantInfo(Slug, ItemBodyPartType, ItemVariant))
 				{
 					if (ItemBodyPartType != EBodyPartType::None)
 					{
@@ -637,6 +656,7 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				}
 			}
 
+			// Assign default items for remaining empty slots
 			for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
 			{
 				if (!BodyPartAssetPtr) continue;
@@ -661,11 +681,12 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 				}
                 // else { UE_LOG(LogCustomizationComponent, Warning, TEXT("No valid variant found for default item '%s'."), *DefaultSlug.ToString()); }
 			}
-			
+
+			// Rebuild TargetState based on final assignments
 			TargetState.EquippedBodyPartsItems.Empty();
-			TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap; 
-			TSet<EBodyPartType> FinalUsedPartTypes;     
-            TArray<FName> FinalActiveSlugs;
+			TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap;
+			TSet<EBodyPartType> FinalUsedPartTypes;
+			TArray<FName> FinalActiveSlugs;
 
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Rebuilding TargetState based on final slot assignments..."));
 			for (const auto& Pair : FinalSlotAssignment)
@@ -675,47 +696,44 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 
 				if (const FBodyPartVariant* const* FoundVariant = AllValidVariants.Find(Slug))
 				{
-					TargetState.EquippedBodyPartsItems.Add(Slug, BodyPartType);
-
+					TargetState.EquippedBodyPartsItems.Add(Slug, BodyPartType); // Update TargetState
 					FinalSlugToVariantMap.Add(Slug, *FoundVariant);
 					FinalUsedPartTypes.Add(BodyPartType);
-                    FinalActiveSlugs.Add(Slug);
-                     UE_LOG(LogCustomizationComponent, Verbose, TEXT("Final state includes: Slug='%s', Type='%s'"), *Slug.ToString(), *UEnum::GetValueAsString(BodyPartType));
+					FinalActiveSlugs.Add(Slug);
+					UE_LOG(LogCustomizationComponent, Verbose, TEXT("Final state includes: Slug='%s', Type='%s'"), *Slug.ToString(), *UEnum::GetValueAsString(BodyPartType));
 				}
-                else
-                {
-                   
-                    UE_LOG(LogCustomizationComponent, Error, TEXT("Could not find cached variant for final item '%s'. State might be incorrect."), *Slug.ToString());
-                }
+				else
+				{
+					UE_LOG(LogCustomizationComponent, Error, TEXT("Could not find cached variant for final item '%s'. State might be incorrect."), *Slug.ToString());
+				}
 			}
-			
+
+			// Apply meshes and reset unused parts based on the final calculated state
 			ApplyBodySkin(TargetState, SomatotypeDataAsset, FinalUsedPartTypes, FinalSlugToVariantMap);
-			
+
 			UE_LOG(LogCustomizationComponent, Log, TEXT("Applying final body part meshes..."));
 			for (const FName& Slug : FinalActiveSlugs)
 			{
 				if (const FBodyPartVariant* const* FoundVariant = FinalSlugToVariantMap.Find(Slug))
 				{
-					
-                    EBodyPartType PartType = TargetState.EquippedBodyPartsItems.FindChecked(Slug);
+					EBodyPartType PartType = TargetState.EquippedBodyPartsItems.FindChecked(Slug); // Get type from updated TargetState
 					UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying mesh for BodyPart: %s (Type: %s)"), *Slug.ToString(), *UEnum::GetValueAsString(PartType));
 					CustomizationUtilities::SetBodyPartSkeletalMesh(this, (*FoundVariant)->BodyPartSkeletalMesh, PartType);
 				}
 			}
-			
+
 			ResetUnusedBodyParts(TargetState, FinalUsedPartTypes);
 
 			DebugInfo.EquippedItems = TargetState.GetItemsList();
-			
-			InvalidateSkin(TargetState);
+
+			// Note: InvalidateSkin is called by the main Invalidate function if needed.
+			// Calling it here again might be redundant depending on the main flow. Removed explicit call.
+			// InvalidateSkin(TargetState);
 
 			OnSomatotypeLoaded.Broadcast(SomatotypeDataAsset);
-			PendingInvalidationCounter.Pop();
 		});
-
-	// PendingInvalidationCounter.Pop(); 
-                                      
-	UE_LOG(LogCustomizationComponent, Log, TEXT("Exiting InvalidateBodyParts (sync load initiated).")); // Changed log message
+	
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Exiting LoadAndProcessBodyParts (sync load finished)."));
 }
 
 void UCustomizationComponent::ApplyBodySkin(const FCustomizationContextData& TargetState,
@@ -770,229 +788,205 @@ void UCustomizationComponent::ResetUnusedBodyParts(const FCustomizationContextDa
 void UCustomizationComponent::InvalidateAttachedActors(FCustomizationContextData& TargetState)
 {
 	 UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidating Attached Actors based on TargetState..."));
-	PendingInvalidationCounter.Push();
-	
-    TMap<ECustomizationSlotType, TArray<FName>> SlugsToRemovePerSlot;
 
-    for(const auto& CurrentPair : CurrentCustomizationState.EquippedCustomizationItemActors)
-    {
-        ECustomizationSlotType CurrentSlot = CurrentPair.Key;
-        const FEquippedItemsInSlotInfo& CurrentSlotInfo = CurrentPair.Value;
+	// --- Calculate actors to remove based on diff ---
+	TMap<ECustomizationSlotType, TArray<FName>> SlugsToRemovePerSlot;
+	// Compare Current (InvalidationContext.Current holds the state *before* this invalidation run) vs TargetState
+	for(const auto& CurrentPair : InvalidationContext.Current.EquippedCustomizationItemActors) // Use context's 'current'
+	{
+		ECustomizationSlotType CurrentSlot = CurrentPair.Key;
+		const FEquippedItemsInSlotInfo& CurrentSlotInfo = CurrentPair.Value;
+		const FEquippedItemsInSlotInfo* TargetSlotInfoPtr = TargetState.EquippedCustomizationItemActors.Find(CurrentSlot);
 
-        const FEquippedItemsInSlotInfo* TargetSlotInfoPtr = TargetState.EquippedCustomizationItemActors.Find(CurrentSlot);
-
-        if (TargetSlotInfoPtr)
-        {
-            // Diff beetwin Current and Target for slot
-            for(const auto& CurrentActorInfo : CurrentSlotInfo.EquippedItemActors)
-            {
-                bool bFoundInTarget = false;
-                for(const auto& TargetActorInfo : TargetSlotInfoPtr->EquippedItemActors)
-                {
-                    if (CurrentActorInfo.ItemSlug == TargetActorInfo.ItemSlug)
-                    {
-                        bFoundInTarget = true;
-                        break;
-                    }
-                }
-                if (!bFoundInTarget)
-                {
-                    SlugsToRemovePerSlot.FindOrAdd(CurrentSlot).Add(CurrentActorInfo.ItemSlug);
-                }
-            }
-        }
-        else
-        {
-             for(const auto& CurrentActorInfo : CurrentSlotInfo.EquippedItemActors)
-             {
-                 SlugsToRemovePerSlot.FindOrAdd(CurrentSlot).Add(CurrentActorInfo.ItemSlug);
-             }
-        }
-    }
-
-	// --- 1: Remove useless actors ---
-    for(const auto& RemovePair : SlugsToRemovePerSlot)
-    {
-        ECustomizationSlotType SlotToRemove = RemovePair.Key;
-        const TArray<FName>& SlugsToRemove = RemovePair.Value;
-
-        if(const FEquippedItemsInSlotInfo* CurrentSlotInfoPtr = CurrentCustomizationState.EquippedCustomizationItemActors.Find(SlotToRemove))
-        {
-            for(const FName& Slug : SlugsToRemove)
-            {
-                for(const auto& ActorInfo : CurrentSlotInfoPtr->EquippedItemActors)
-                {
-                    if (ActorInfo.ItemSlug == Slug)
-                    {
-                        UE_LOG(LogCustomizationComponent, Verbose, TEXT("Removing actors for ItemSlug: %s in Slot: %s"), *Slug.ToString(), *UEnum::GetValueAsString(SlotToRemove));
-                        for (const auto& ItemRelatedActor : ActorInfo.ItemRelatedActors)
-			            {
-				            if (ItemRelatedActor.IsValid())
-				            {
-					            const FDetachmentTransformRules DetachmentTransformRules(EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, false);
-					            ItemRelatedActor->DetachFromActor(DetachmentTransformRules);
-					            ItemRelatedActor->Destroy();
-				            }
-			            }
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-
-	// --- 2: Target&Current: Get slugs for update ---
-    TArray<FPrimaryAssetId> AddedOrUpdatedAssetIds;
-	TMap<FPrimaryAssetId, FName> AssetIdToSlugMap;
-    TMap<FName, ECustomizationSlotType> SlugToSlotMap;
-
-    for(const auto& TargetPair : TargetState.EquippedCustomizationItemActors)
-    {
-        ECustomizationSlotType TargetSlot = TargetPair.Key;
-        const FEquippedItemsInSlotInfo& TargetSlotInfo = TargetPair.Value;
-
-        const FEquippedItemsInSlotInfo* CurrentSlotInfoPtr = CurrentCustomizationState.EquippedCustomizationItemActors.Find(TargetSlot);
-
-        for(const auto& TargetActorInfo : TargetSlotInfo.EquippedItemActors)
-        {
-            FName TargetSlug = TargetActorInfo.ItemSlug;
-            bool bFoundInCurrent = false;
-            if (CurrentSlotInfoPtr)
-            {
-                 for(const auto& CurrentActorInfo : CurrentSlotInfoPtr->EquippedItemActors)
-                 {
-                      if (CurrentActorInfo.ItemSlug == TargetSlug)
-                      {
-                          bFoundInCurrent = true;
-                          // TODO: if asset same something else not. Check this
-                          break;
-                      }
-                 }
-            }
-
-            if (!bFoundInCurrent)
-            {
-                 FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(TargetSlug);
-                 if (AssetId.IsValid())
-                 {
-                     AddedOrUpdatedAssetIds.AddUnique(AssetId);
-                     AssetIdToSlugMap.Add(AssetId, TargetSlug);
-                     SlugToSlotMap.Add(TargetSlug, TargetSlot); 
-                 }
-            }
-        }
-    }
-
-
-	// --- 3: Load ---
-    if (AddedOrUpdatedAssetIds.IsEmpty())
-    {
-        UE_LOG(LogCustomizationComponent, Verbose, TEXT("No actors to add or update."));
-		PendingInvalidationCounter.Pop();
-    	
-        // InvalidateSkin(TargetState); // TODO:: Call again?
-		return;
-    }
-
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Loading %d assets for actor spawning..."), AddedOrUpdatedAssetIds.Num());
-    PendingInvalidationCounter.Push();
-
-	UCustomizationAssetManager::StaticSyncLoadAssetList<UCustomizationDataAsset>(
-		AddedOrUpdatedAssetIds, [this, TargetState, AssetIdToSlugMap, SlugToSlotMap](TArray<UCustomizationDataAsset*> LoadedAssets) 
+		if (TargetSlotInfoPtr) // Slot exists in target
 		{
-            UE_LOG(LogCustomizationComponent, Log, TEXT("Loaded %d assets for actor spawning."), LoadedAssets.Num());
+			for(const auto& CurrentActorInfo : CurrentSlotInfo.EquippedItemActors)
+			{
+				bool bFoundInTarget = TargetSlotInfoPtr->EquippedItemActors.ContainsByPredicate(
+					[&](const FEquippedItemActorsInfo& TargetActorInfo){ return TargetActorInfo.ItemSlug == CurrentActorInfo.ItemSlug; }
+				);
+				if (!bFoundInTarget)
+				{
+					SlugsToRemovePerSlot.FindOrAdd(CurrentSlot).Add(CurrentActorInfo.ItemSlug);
+				}
+			}
+		}
+		else // Slot doesn't exist in target, remove all items from it
+		{
+			 for(const auto& CurrentActorInfo : CurrentSlotInfo.EquippedItemActors)
+			 {
+				 SlugsToRemovePerSlot.FindOrAdd(CurrentSlot).Add(CurrentActorInfo.ItemSlug);
+			 }
+		}
+	}
 
-			// create temporary copy for target state for updated items
-            //
-            // Update InvalidationContext.Current, cz it's a copy of TargetState already
+	// --- 1: Remove useless actors (based on diff calculated above) ---
+	for(const auto& RemovePair : SlugsToRemovePerSlot)
+	{
+		ECustomizationSlotType SlotToRemove = RemovePair.Key;
+		const TArray<FName>& SlugsToRemove = RemovePair.Value;
+
+		// Find the actors to remove in the *actual* current state (before update) stored in context
+		if(const FEquippedItemsInSlotInfo* CurrentSlotInfoPtr = InvalidationContext.Current.EquippedCustomizationItemActors.Find(SlotToRemove))
+		{
+			for(const FName& Slug : SlugsToRemove)
+			{
+				// Find the specific item info in the current state context
+				const FEquippedItemActorsInfo* ActorInfoPtr = CurrentSlotInfoPtr->EquippedItemActors.FindByPredicate(
+					[&](const FEquippedItemActorsInfo& Info){ return Info.ItemSlug == Slug; });
+
+				if (ActorInfoPtr)
+				{
+					UE_LOG(LogCustomizationComponent, Verbose, TEXT("Removing actors for ItemSlug: %s in Slot: %s"), *Slug.ToString(), *UEnum::GetValueAsString(SlotToRemove));
+					for (const auto& ItemRelatedActor : ActorInfoPtr->ItemRelatedActors) // Use actors from context
+					{
+						if (ItemRelatedActor.IsValid())
+						{
+							const FDetachmentTransformRules DetachmentTransformRules(EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, false);
+							ItemRelatedActor->DetachFromActor(DetachmentTransformRules);
+							ItemRelatedActor->Destroy();
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// --- 2: Target&Current: Get slugs for update (items present in Target but not in Current) ---
+	TArray<FPrimaryAssetId> AddedOrUpdatedAssetIds;
+	TMap<FPrimaryAssetId, FName> AssetIdToSlugMap;
+	TMap<FName, ECustomizationSlotType> SlugToSlotMap;
+
+	for(const auto& TargetPair : TargetState.EquippedCustomizationItemActors)
+	{
+		ECustomizationSlotType TargetSlot = TargetPair.Key;
+		const FEquippedItemsInSlotInfo& TargetSlotInfo = TargetPair.Value;
+		const FEquippedItemsInSlotInfo* CurrentSlotInfoPtr = InvalidationContext.Current.EquippedCustomizationItemActors.Find(TargetSlot); // Compare against context's current
+
+		for(const auto& TargetActorInfo : TargetSlotInfo.EquippedItemActors)
+		{
+			FName TargetSlug = TargetActorInfo.ItemSlug;
+			bool bFoundInCurrent = false;
+			if (CurrentSlotInfoPtr)
+			{
+				 bFoundInCurrent = CurrentSlotInfoPtr->EquippedItemActors.ContainsByPredicate(
+					 [&](const FEquippedItemActorsInfo& CurrentActorInfo){ return CurrentActorInfo.ItemSlug == TargetSlug; }
+				 );
+			}
+
+			if (!bFoundInCurrent) // If not found in current state context, it needs to be added
+			{
+				 FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(TargetSlug);
+				 if (AssetId.IsValid())
+				 {
+					 AddedOrUpdatedAssetIds.AddUnique(AssetId);
+					 AssetIdToSlugMap.Add(AssetId, TargetSlug);
+					 SlugToSlotMap.Add(TargetSlug, TargetSlot);
+				 }
+			}
+		}
+	}
+
+	// --- 3: Load and Spawn ---
+	if (AddedOrUpdatedAssetIds.IsEmpty())
+	{
+		UE_LOG(LogCustomizationComponent, Verbose, TEXT("No actors to add or update."));
+		return;
+	}
+
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Loading %d assets for actor spawning..."), AddedOrUpdatedAssetIds.Num());
+	
+	UCustomizationAssetManager::StaticSyncLoadAssetList<UCustomizationDataAsset>(
+		AddedOrUpdatedAssetIds, [this, &TargetState, AssetIdToSlugMap, SlugToSlotMap](TArray<UCustomizationDataAsset*> LoadedAssets) // Removed counter capture, Pass TargetState by ref
+		{
+			UE_LOG(LogCustomizationComponent, Log, TEXT("Loaded %d assets for actor spawning."), LoadedAssets.Num());
 
 			for (const auto& CustomizationAsset : LoadedAssets)
 			{
-                if (!CustomizationAsset) continue;
+				if (!CustomizationAsset) continue;
 
-                const FPrimaryAssetId CustomizationAssetId = CustomizationAsset->GetPrimaryAssetId();
+				const FPrimaryAssetId CustomizationAssetId = CustomizationAsset->GetPrimaryAssetId();
 				const FName ItemSlug = AssetIdToSlugMap.FindChecked(CustomizationAssetId);
-                const ECustomizationSlotType SlotType = SlugToSlotMap.FindChecked(ItemSlug);
+				const ECustomizationSlotType SlotType = SlugToSlotMap.FindChecked(ItemSlug);
 
 				UE_LOG(LogCustomizationComponent, Verbose, TEXT("Spawning actors for ItemSlug: %s in Slot: %s"), *ItemSlug.ToString(), *UEnum::GetValueAsString(SlotType));
 
 				TArray<TStrongObjectPtr<AActor>> SpawnedActorPtrs;
-                TArray<AActor*> SpawnedActorsRaw;
+				TArray<AActor*> SpawnedActorsRaw;
 
+				//const auto& SuitableComplects = CustomizationAsset->GetSuitableComplects(TargetState.Somatotype);
+				// TODO:: maybe we'll need siutable assets depend on somatotype
+				
 				const auto& SuitableComplects = CustomizationAsset->CustomizationComplect;
 				if (SuitableComplects.IsEmpty())
 				{
-					UE_LOG(LogCustomizationComponent, Warning, TEXT("No CustomizationComplect found in asset %s for item %s"), *CustomizationAssetId.ToString(), *ItemSlug.ToString());
+					UE_LOG(LogCustomizationComponent, Warning, TEXT("No suitable CustomizationComplect found in asset %s for item %s with Somatotype %s"),
+						*CustomizationAssetId.ToString(), *ItemSlug.ToString(), *UEnum::GetValueAsString(TargetState.Somatotype));
 					continue;
 				}
 
 				for (const FCustomizationComplect& Complect : SuitableComplects)
 				{
-                    if (!Complect.ActorClass)
-                    {
-                        UE_LOG(LogCustomizationComponent, Warning, TEXT("Invalid ActorClass in Complect for item %s"), *ItemSlug.ToString());
-                        continue;
-                    }
+					if (!Complect.ActorClass)
+					{
+						UE_LOG(LogCustomizationComponent, Warning, TEXT("Invalid ActorClass in Complect for item %s"), *ItemSlug.ToString());
+						continue;
+					}
 
 					AActor* SpawnedActor = GetWorld()->SpawnActor(Complect.ActorClass);
-                    if (!SpawnedActor)
-                    {
-                         UE_LOG(LogCustomizationComponent, Error, TEXT("Failed to spawn actor of class %s for item %s"), *Complect.ActorClass->GetName(), *ItemSlug.ToString());
-                         continue;
-                    }
+					if (!SpawnedActor)
+					{
+						 UE_LOG(LogCustomizationComponent, Error, TEXT("Failed to spawn actor of class %s for item %s"), *Complect.ActorClass->GetName(), *ItemSlug.ToString());
+						 continue;
+					}
 
-                    SpawnedActorPtrs.Add(TStrongObjectPtr(SpawnedActor)); 
+					SpawnedActorPtrs.Add(TStrongObjectPtr(SpawnedActor));
 					SpawnedActorsRaw.Add(SpawnedActor);
-
 					SpawnedActor->Tags.Add(GLOBAL_CONSTANTS::CustomizationTag);
 
-                   // 4. Attaching
+					// 4. Attaching
+					// Attach to BodySkin by default, could be made more flexible if needed
 					if (USkeletalMeshComponent* AttachTarget = Skeletals.FindRef(EBodyPartType::BodySkin))
-                    {
-					    SpawnedActor->AttachToComponent(AttachTarget, FAttachmentTransformRules::KeepRelativeTransform, Complect.SocketName);
-					    SpawnedActor->SetActorRelativeTransform(Complect.RelativeTransform);
-                         UE_LOG(LogCustomizationComponent, Verbose, TEXT("Attached spawned actor %s to %s at socket %s"), *SpawnedActor->GetName(), *AttachTarget->GetName(), *Complect.SocketName.ToString());
-
-                        // TODO: material for actor here maybe?
-                        // CustomizationUtilities::SetMaterialOnMesh() 
-                    }
-                    else
-                    {
-                        UE_LOG(LogCustomizationComponent, Warning, TEXT("Could not find BodySkin mesh component to attach actor %s"), *SpawnedActor->GetName());
-                    }
+					{
+						SpawnedActor->AttachToComponent(AttachTarget, FAttachmentTransformRules::KeepRelativeTransform, Complect.SocketName);
+						SpawnedActor->SetActorRelativeTransform(Complect.RelativeTransform);
+						UE_LOG(LogCustomizationComponent, Verbose, TEXT("Attached spawned actor %s to %s at socket %s"), *SpawnedActor->GetName(), *AttachTarget->GetName(), *Complect.SocketName.ToString());
+					}
+					else
+					{
+						UE_LOG(LogCustomizationComponent, Warning, TEXT("Could not find BodySkin mesh component to attach actor %s"), *SpawnedActor->GetName());
+					}
 				}
 
 				if (!SpawnedActorsRaw.IsEmpty())
 				{
 					OnNewCustomizationActorsAttached.Broadcast(SpawnedActorsRaw);
 
-					// 5. Enable Physics 
+					// 5. Enable Physics (deferred to next tick)
 					GetWorld()->GetTimerManager().SetTimerForNextTick([this, SpawnedActorsRaw]() mutable
 					{
-						for (AActor* SpawnedActor : SpawnedActorsRaw) 
+						for (AActor* SpawnedActor : SpawnedActorsRaw)
 						{
-                            if (!SpawnedActor) continue; 
+							if (!SpawnedActor) continue;
 							if (auto* CustomizationItemBase = Cast<ACustomizationItemBase>(SpawnedActor))
 							{
 								CustomizationItemBase->SetItemSimulatePhysics(true);
 							}
 						}
+						SpawnedActorsRaw.Empty(); // Clear array after use in lambda
 					});
 				}
 
-				// --- 6: Update current info ---
-                InvalidationContext.Current.ReplaceOrAddSpawnedActors(ItemSlug, SlotType, SpawnedActorPtrs);
-                UE_LOG(LogCustomizationComponent, Verbose, TEXT("Updated InvalidationContext.Current with spawned actors for %s"), *ItemSlug.ToString());
+				// --- 6: Update TargetState info ---
+				TargetState.ReplaceOrAddSpawnedActors(ItemSlug, SlotType, SpawnedActorPtrs);
+				UE_LOG(LogCustomizationComponent, Verbose, TEXT("Updated TargetState with spawned actors for %s"), *ItemSlug.ToString());
 			}
-			
-			DebugInfo.ActorInfo = InvalidationContext.Current.GetActorsList();
-			
-			PendingInvalidationCounter.Pop();
-		});
 
-	PendingInvalidationCounter.Pop();
-    UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Attached Actors."));
+			// Update Debug Info based on the *modified* TargetState
+			DebugInfo.ActorInfo = TargetState.GetActorsList();
+		});
+	
+	UE_LOG(LogCustomizationComponent, Log, TEXT("Finished Invalidating Attached Actors."));
 }
 
 void UCustomizationComponent::StartInvalidationTimer(const FCustomizationContextData& TargetState)
