@@ -31,6 +31,9 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Inventory")
     void AddItem(UItemMetaAsset *Item, const int32 Count);
+    
+    UFUNCTION(BlueprintCallable, Category = "Inventory")
+    void DropItem(UItemMetaAsset *Item, const int32 Count);
 
     auto GetOwnedItems() { return OwnedItems; }
 

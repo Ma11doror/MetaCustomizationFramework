@@ -42,7 +42,7 @@ protected:
     
 public:
     UFUNCTION(BlueprintImplementableEvent)
-    void SetItemNameText(const FText& InItemName);
+    void SetItemNameText(const FName& InItemName);
 
 protected:
     
@@ -51,9 +51,10 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta= (ExposeOnSpawn = true))
     UTexture2D* DefaultSlotIcon = nullptr;
-    
+
+    // TODO:: Add it to global constants?
     UPROPERTY(BlueprintReadWrite)
-    FText DefaultItemName = FText::FromString("Nothing Equipped");
+    FName DefaultItemName = TEXT("Nothing Equipped");
 
     UFUNCTION(BlueprintImplementableEvent)
     void ActivateVisualEffects();

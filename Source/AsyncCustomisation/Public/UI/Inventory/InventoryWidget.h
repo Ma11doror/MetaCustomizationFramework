@@ -26,6 +26,14 @@ class UItemSlotWidget;
 class UCommonAnimatedSwitcher;
 class UCommonListView;
 
+UENUM(BlueprintType)
+enum class EInventorySwitcherTab : uint8
+{
+    SlotsView     UMETA(DisplayName = "Slots View"),
+    ItemsListView UMETA(DisplayName = "Items List View"),
+    NoItemsView   UMETA(DisplayName = "No Items View")
+};
+
 UCLASS()
 class ASYNCCUSTOMISATION_API UInventoryWidget : public UActivatableWidget
 {
@@ -42,7 +50,9 @@ public:
     virtual void NativeOnDeactivated() override;
     
     UFUNCTION(BlueprintCallable, Category = "Inventory")
-    void ClearFilters();
+    void ClearFilter();
+
+    void SetActiveInventoryTab(EInventorySwitcherTab Tab);
 
 protected:
     UFUNCTION()
@@ -51,7 +61,9 @@ protected:
     void ConstructButtons();
     
     UFUNCTION(BlueprintCallable)
-    void OnListViewItemDoubleClicked(UObject* ItemObject);
+    void OnListItemClicked(UObject* ItemObject);
+
+    void OnBackButtonClicked();
 
     UFUNCTION(BlueprintImplementableEvent)
     void PlayFailEquipAnimation();
@@ -72,9 +84,11 @@ protected:
     TObjectPtr<UCommonListView> ItemsList = nullptr;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category="MVVM")
-    TObjectPtr<UVM_Inventory> InventoryViewModel;
+    TObjectPtr<UVM_Inventory> InventoryViewModel = nullptr;
 
-    //
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (BindWidget))
+    TObjectPtr<UCommonButtonBase> BackButton = nullptr;
+    
     UPROPERTY()
     UCommonButtonGroupBase* InventorySlotsButtonGroup = nullptr;
 
@@ -93,12 +107,12 @@ protected:
 
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UCommonButtonBase* FeetButton;
-    //
     
+    // Two Sections for our current design
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UVerticalBox* LeftTabsBox;
     
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UVerticalBox* RightTabsBox;
 
-}; 
+};
