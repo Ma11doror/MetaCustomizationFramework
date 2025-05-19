@@ -6,6 +6,7 @@ namespace GLOBAL_CONSTANTS
 {
 	inline const FSoftObjectPath DATA_TABLE_LIBRARY = FSoftObjectPath(TEXT("/Game/Data/DT_DataTableLibrary.DT_DataTableLibrary"));
 	inline const FString NONE_STRING = TEXT("NONE");
+	inline const FName NONE_FNAME = TEXT("NONE");
 
 	inline const FPrimaryAssetId NONE_ASSET_ID = FPrimaryAssetId();
 	

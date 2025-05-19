@@ -7,7 +7,11 @@
 		{
 			"Name": "AsyncCustomisation",
 			"Type": "Runtime",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"CommonUI",
+				"ModelViewViewModel"
+			]
 		}
 	],
 	"Plugins": [
@@ -32,6 +36,14 @@
 				"Linux",
 				"Android"
 			]
+		},
+		{
+			"Name": "CommonUI",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelViewViewModelPreview",
+			"Enabled": true
 		}
 	]
 }

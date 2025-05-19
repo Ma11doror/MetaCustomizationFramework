@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "Components/Core/Somatotypes.h"
 #include "GameFramework/Character.h"
+#include "Components/Core/CharacterComponentBase.h"
+#include "Components/CustomizationComponent.h"
+#include "Components/InventoryComponent.h"
 #include "BaseCharacter.generated.h"
 
 enum class ESomatotype : uint8;
@@ -60,7 +63,9 @@ public:
 	UPROPERTY(Category=Character, VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UCustomizationComponent> CustomizationComponent = nullptr;
 
-	
+	UPROPERTY(Category=Character, VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
+	TObjectPtr<UInventoryComponent> InventoryComponent = nullptr;
+
 	UFUNCTION(BlueprintCallable)
 	void SetupMasterPose();
 	

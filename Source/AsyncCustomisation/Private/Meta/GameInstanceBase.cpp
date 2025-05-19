@@ -3,11 +3,37 @@
 
 #include "Meta/GameInstanceBase.h"
 
-#include "Meta/MetaManagerSubsystem.h"
+#include "Components/CustomizationComponent.h"
+#include "Components/InventoryComponent.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/VM_Inventory.h"
 
-void UGameInstanceBase::InitializeMeta()
+
+void UGameInstanceBase::RequestViewModel(APlayerController* InController)
 {
-	GetSubsystem<UMetaManagerSubsystem>()->Deinit();
+	APawn* Pawn = InController->GetPawn();
+	UInventoryComponent* InventoryComponent = Pawn->FindComponentByClass<UInventoryComponent>();
+	UCustomizationComponent* CustomizationComponent = Pawn->FindComponentByClass<UCustomizationComponent>();
 
-	GetSubsystem<UMetaManagerSubsystem>()->Init();
+	if (!InventoryViewModel)
+	{
+		InventoryViewModel = NewObject<UVM_Inventory>(InController);
+		SetupViewModel(InventoryViewModel);
+	}
+
+	OnInventoryViewModelUpdated.Broadcast(InventoryViewModel, InventoryComponent, CustomizationComponent);
+}
+
+UGameInstanceBase* UGameInstanceBase::Get(const UObject* InWorldContextObject, const bool IsRequired)
+{
+	ensureAlways(InWorldContextObject);
+
+	auto* RawGameInstance = UGameplayStatics::GetGameInstance(InWorldContextObject);
+	auto* GameInstance = Cast<UGameInstanceBase>(RawGameInstance);
+	if (IsRequired)
+	{
+		check(GameInstance);
+	}
+
+	return GameInstance;
 }

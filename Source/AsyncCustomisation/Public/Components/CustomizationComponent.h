@@ -10,6 +10,7 @@
 
 #include "CustomizationComponent.generated.h"
 
+struct FBodyPartVariant;
 class UCustomizationAssetManager;
 class USomatotypeDataAsset;
 DECLARE_LOG_CATEGORY_EXTERN(LogCustomizationComponent, Log, All);
@@ -40,19 +41,23 @@ public:
 	void EquipItem(const FName& ItemSlug);
 	void EquipItems(const TArray<FName>& Items);
 	void UnequipItem(const FName& ItemSlug);
+	bool RequestUnequipSlot(ECustomizationSlotType InSlotToUnequip);
 	
 	void ResetAll();
 	void HardRefreshAll();
 
 	void SetCustomizationContext(const FCustomizationContextData& InContext);
+	
+	UFUNCTION(BlueprintPure, Category = "Customization")
 	const FCustomizationContextData& GetCurrentCustomizationState();
 
 	const TMap<EBodyPartType, USkeletalMeshComponent*>& GetSkeletals();
 
 	void SetAttachedActorsSimulatePhysics(bool bSimulatePhysics);
-
-	UFUNCTION(BlueprintPure)
-	ABaseCharacter* GetOwningCharacter();
+	
+	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquippedItemsChanged, const FCustomizationContextData&, NewState);
+	UPROPERTY(BlueprintAssignable, Category = "Customization")
+	FOnEquippedItemsChanged OnEquippedItemsChanged;
 
 protected:
 	void ClearContext();
@@ -100,7 +105,7 @@ protected:
 	FCustomizationInvalidationContext InvalidationContext;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings")
-	bool OnlyOneItemInSlot = true;
+	bool OnlyOneItemInSlot = false;
 	
 	TMap<EBodyPartType, USkeletalMeshComponent*> Skeletals;
 	
@@ -181,7 +186,4 @@ private:
 
 	void UpdateDebugInfo();
 	void DrawDebugTextBlock(const FVector& Location, const FString& Text, AActor* OwningActor, const FColor& Color);
-	
-	//UPROPERTY()
-	//TWeakObjectPtr<AExampleCharacter> OwningCharacter;
 };

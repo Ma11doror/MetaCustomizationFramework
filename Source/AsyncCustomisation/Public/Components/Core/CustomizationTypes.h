@@ -106,7 +106,7 @@ struct FCharacterVFXCustomization
 	}
 };
 
-USTRUCT()
+USTRUCT(Blueprintable)
 struct FCustomizationContextData
 {
 	/*

@@ -84,9 +84,11 @@ namespace CustomizationUtilities
 		SetMaterialsFromMesh(SkeletalMeshComponent, SourceSkeletalMesh);
 	}
 
-	static void SetBodyPartSkeletalMesh(
-		UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, const EBodyPartType TargetBodyPartType);
-	static void SetSkeletalMesh(
-		UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, USkeletalMeshComponent* TargetSkeletalMeshComponent);
+	static void SetBodyPartSkeletalMesh(UCustomizationComponent* Self,
+	                                    USkeletalMesh* SourceSkeletalMesh,
+	                                    const EBodyPartType TargetBodyPartType);
 	
+	static void SetSkeletalMesh(UCustomizationComponent* Self,
+								USkeletalMesh* SourceSkeletalMesh,
+								USkeletalMeshComponent* TargetSkeletalMeshComponent);
 }

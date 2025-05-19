@@ -16,8 +16,6 @@ class ASYNCCUSTOMISATION_API USomatotypeDataAsset : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(BlueprintReadOnly, EditAnywhere)
-	TArray<UBodyPartAsset*> BodyParts;
 	
 	UPROPERTY(BlueprintReadOnly, EditAnywhere)
 	TMap<FSkinFlagCombination, FBodySkinAsset> SkinAssociation;
