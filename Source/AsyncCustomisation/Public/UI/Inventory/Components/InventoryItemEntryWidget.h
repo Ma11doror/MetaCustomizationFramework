@@ -2,7 +2,6 @@
 
 #include "CoreMinimal.h"
 #include "CommonButtonBase.h"
-#include "CommonUserWidget.h"
 #include "Blueprint/IUserObjectListEntry.h"
 #include "InventoryItemEntryWidget.generated.h"
 
@@ -27,10 +26,14 @@ protected:
 	virtual void NativeOnEntryReleased() override;
 	
 	FDelegateHandle FilterDelegateHandle;
+
 	
 	UPROPERTY(EditAnywhere)
 	TSoftObjectPtr<UTexture2D> CurrencyIcon;
 
 	TWeakObjectPtr<UInventoryItemEntryData> EntryData = nullptr;
 	TWeakObjectPtr<UCustomizationAssetManager> AssetManager = nullptr;
+
+	UFUNCTION(BlueprintImplementableEvent, BlueprintCallable)
+	void SetIsEquippedVisualState(bool IsEquipped);
 };

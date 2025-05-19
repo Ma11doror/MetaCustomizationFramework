@@ -22,7 +22,10 @@ struct FInventoryEquippedItemData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadOnly, Category="Equipped Item")
-    FText ItemName;
+    FName ItemSlug;
+
+    UPROPERTY(BlueprintReadOnly, Category="Equipped Item")
+    FName ItemName;
 
     UPROPERTY(BlueprintReadOnly, Category="Equipped Item")
     TSoftObjectPtr<UTexture2D> Icon;
@@ -32,9 +35,10 @@ struct FInventoryEquippedItemData
 
     bool operator==(const FInventoryEquippedItemData& Other) const
     {
-        return ItemName.EqualTo(Other.ItemName) &&
-            Icon == Other.Icon &&
-            Tier == Other.Tier;
+        return ItemSlug.IsEqual(Other.ItemSlug); // &&
+            //ItemName.IsEqual(Other.ItemName) &&
+            //Tier == Other.Tier;
+        // Specify how to compare items here. Maybe items can upgrade tier?
     }
 };
 
@@ -127,7 +131,10 @@ protected:
     bool RequestEquipItem(FName ItemSlugToEquip);
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
-    void RequestUnequipItem(FName ItemSlugToUnequip);
+    bool RequestUnequipItem(FName ItemSlugToUnequip);
+    
+    UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
+    void OnEntryItemClicked(FName ItemSlugToUnequip);
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
     void RequestUnequipSlot(ECustomizationSlotType SlotToUnequip);

@@ -176,7 +176,7 @@ private:
 		}
 		
 		const float VerticalOffset = 100.0f; 
-		const float HorizontalOffset = 45.0f;
+		const float HorizontalOffset = 100.0f;
 		const float OffsetForSecondLine = 65.0f;
 		
 	};

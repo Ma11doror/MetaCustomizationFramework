@@ -10,13 +10,26 @@ class UItemMetaAsset;
 enum class EItemType : uint8;
 enum class EItemTier : uint8;
 
+DECLARE_DELEGATE_OneParam(FOnIsEquippedChanged, bool /*InIsEquipped*/);
+
 UCLASS(BlueprintType, DefaultToInstanced)
-class ASYNCCUSTOMISATION_API UInventoryListItemData final : public UObject
+class ASYNCCUSTOMISATION_API UInventoryListItemData : public UObject
 {
 	GENERATED_BODY()
 	
 
 public:
+
+	UFUNCTION(BlueprintPure, Category = "Inventory Item")
+	bool GetIsEquipped() const { return bIsEquipped; }
+	
+	void SetIsEquipped(bool bNewValue)
+	{
+		bIsEquipped = bNewValue;
+		OnIsEquippedChanged.ExecuteIfBound(bIsEquipped);
+	}
+	
+	
 	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(EItemType)> /*WidgetHandler*/)>;
 	using UnsubscribeFuncType = TFunction<void(FDelegateHandle)>;
 
@@ -39,7 +52,7 @@ public:
 	TSoftObjectPtr<UTexture2D> Icon;
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
-	FText Name;
+	FName Name;
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	FText Description;
@@ -50,8 +63,6 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	EItemType ItemType = EItemType::None; 
 
-	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
-	bool bIsEquipped = false;
 	
 	void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped)
 	{
@@ -102,8 +113,12 @@ public:
 		 *  SlotType == Other.SlotType && 
 		 */
 	}
+	
+	FOnIsEquippedChanged OnIsEquippedChanged;
 
 private:
 	SubscribeFuncType SubscribeFunction;
 	UnsubscribeFuncType UnsubscribeFunction;
+	
+	bool bIsEquipped = false;
 };
