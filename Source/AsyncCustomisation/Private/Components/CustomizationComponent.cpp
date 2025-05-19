@@ -21,6 +21,12 @@ UCustomizationComponent::UCustomizationComponent()
 
 void UCustomizationComponent::UpdateFromOwning()
 {
+	if (!OwningCharacter.IsValid())
+	{
+		UE_LOG(LogCustomizationComponent, Error, TEXT("UpdateFromOwning: OwningCharacter is not valid."));
+		return;
+	}
+
 	Skeletals = {
 		{EBodyPartType::BodySkin, OwningCharacter->GetMesh()},
 		{EBodyPartType::Legs, OwningCharacter->LegsMesh},
@@ -48,7 +54,7 @@ void UCustomizationComponent::UpdateFromOwning()
 
 void UCustomizationComponent::EquipItem(const FName& ItemSlug)
 {
-		if (ItemSlug == NAME_None) return;
+	if (ItemSlug == NAME_None) return;
 
 	const FPrimaryAssetId ItemCustomizationAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(ItemSlug);
 	if (!ItemCustomizationAssetId.IsValid())
@@ -87,7 +93,7 @@ void UCustomizationComponent::EquipItem(const FName& ItemSlug)
 	}
 	else if (CustomizationAssetClass->IsChildOf(UMaterialCustomizationDataAsset::StaticClass()) || CustomizationAssetClass->IsChildOf(UMaterialPackCustomizationDA::StaticClass()))
 	{
-        // TODO: Handle if something will be wrong with packs of materisl?
+        // TODO: Handle if something will be wrong with packs of material?
         // 
 		TargetState.EquippedMaterialsMap.Add(ItemSlug, EBodyPartType::None); // BodyPart will be known when we load it
 	}
@@ -213,6 +219,12 @@ void UCustomizationComponent::UnequipItem(const FName& ItemSlug)
     }
 }
 
+bool UCustomizationComponent::RequestUnequipSlot(ECustomizationSlotType InSlotToUnequip)
+{
+	//TODO:: 
+	return false;
+}
+
 void UCustomizationComponent::ResetAll()
 {
 	HardRefreshAll();
@@ -271,11 +283,6 @@ const TMap<EBodyPartType, USkeletalMeshComponent*>& UCustomizationComponent::Get
 
 void UCustomizationComponent::SetAttachedActorsSimulatePhysics(bool bSimulatePhysics)
 {
-}
-
-ABaseCharacter* UCustomizationComponent::GetOwningCharacter()
-{
-	return OwningCharacter.IsValid() ? OwningCharacter.Get() : nullptr;
 }
 
 void UCustomizationComponent::Invalidate(const FCustomizationContextData& TargetState,
@@ -355,7 +362,9 @@ void UCustomizationComponent::Invalidate(const FCustomizationContextData& Target
 
 	// 4. update current to the potentially modified target state after all invalidates
 	CurrentCustomizationState = ModifiableTargetState;
-
+	
+	OnEquippedItemsChanged.Broadcast(CurrentCustomizationState);
+	
 	InvalidationContext.ClearTemporaryContext();
 	DeferredTargetState.Reset();
 
@@ -505,7 +514,7 @@ void UCustomizationComponent::InvalidateBodyParts(FCustomizationContextData& Tar
 		return;
 	}
 
-	AssetManager->SyncLoadAsset<USomatotypeDataAsset>(SomatotypeAssetId, [this, &TargetState](USomatotypeDataAsset* SomatotypeDataAsset) // Removed counter capture
+	AssetManager->SyncLoadAsset<USomatotypeDataAsset>(SomatotypeAssetId, [this, &TargetState](USomatotypeDataAsset* SomatotypeDataAsset) 
 	{
 		if (!SomatotypeDataAsset)
 		{
@@ -541,25 +550,9 @@ void UCustomizationComponent::InvalidateBodyParts(FCustomizationContextData& Tar
 			UE_LOG(LogCustomizationComponent, Log, TEXT("  Slug: %s -> AssetId: %s"), *Slug.ToString(), *AssetId.ToString());
 			RelevantAssetIdsSet.Add(AssetId);
 		}
-
-		// 4. From Somatotype Defaults
-		UE_LOG(LogCustomizationComponent, Log, TEXT("Processing Somatotype Defaults:"));
-		for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
-		{
-			if (BodyPartAssetPtr)
-    {
-         FPrimaryAssetId AssetId = BodyPartAssetPtr->GetPrimaryAssetId();
-         UE_LOG(LogCustomizationComponent, Log, TEXT("  Default Asset Ptr: %s -> AssetId: %s"), *BodyPartAssetPtr->GetName(), *AssetId.ToString()); 
-         RelevantAssetIdsSet.Add(AssetId);
-    }
-    else
-    {
-         UE_LOG(LogCustomizationComponent, Warning, TEXT("  Found nullptr in SomatotypeDataAsset->BodyParts")); 
-    }
-}
-
-TArray<FPrimaryAssetId> AllRelevantItemAssetIds = RelevantAssetIdsSet.Array();
-UE_LOG(LogCustomizationComponent, Log, TEXT("Final AllRelevantItemAssetIds size: %d"), AllRelevantItemAssetIds.Num());
+		
+		TArray<FPrimaryAssetId> AllRelevantItemAssetIds = RelevantAssetIdsSet.Array();
+		UE_LOG(LogCustomizationComponent, Log, TEXT("Final AllRelevantItemAssetIds size: %d"), AllRelevantItemAssetIds.Num());
 
 		// Load and process body parts synchronously
 		LoadAndProcessBodyParts(TargetState, SomatotypeDataAsset, AllRelevantItemAssetIds);
@@ -594,7 +587,7 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 			}
 
 			TMap<EBodyPartType, FName> FinalSlotAssignment;
-			TMap<FName, const FBodyPartVariant*> AllValidVariants; // Cache variants found
+			TMap<FName, const FBodyPartVariant*> AllValidVariants;
 
 			TArray<FName> ExplicitlyRequestedSlugs;
 			TargetState.EquippedBodyPartsItems.GenerateKeyArray(ExplicitlyRequestedSlugs);
@@ -602,8 +595,8 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 			// Get asset IDs intended for the final state to resolve variants correctly
 			const TArray<FPrimaryAssetId> IntendedEquipmentAssetIds = CommonUtilities::ItemSlugsToAssetIds(TargetState.GetEquippedSlugs());
 
-			auto GetVariantInfo = [&](const FName& Slug, EBodyPartType& OutType, const FBodyPartVariant*& OutVariant) -> bool {
-				// Check cache first
+			auto GetVariantInfo = [&](const FName& Slug, EBodyPartType& OutType, const FBodyPartVariant*& OutVariant) -> bool
+			{
 				if (const FBodyPartVariant** CachedVariant = AllValidVariants.Find(Slug))
 				{
 					OutVariant = *CachedVariant;
@@ -614,20 +607,28 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 					UBodyPartAsset* Asset = *FoundAssetPtr;
 					if (!Asset) return false;
 
-					OutVariant = Asset->GetMatchedVariant(IntendedEquipmentAssetIds); // Use final intended equipment for matching
-					if (OutVariant && OutVariant->IsValid()) {
-						AllValidVariants.Add(Slug, OutVariant); // Cache the found variant
-					} else {
+					OutVariant = Asset->GetMatchedVariant(IntendedEquipmentAssetIds);
+					if (OutVariant && OutVariant->IsValid())
+					{
+						AllValidVariants.Add(Slug, OutVariant);
+					}
+					else
+					{
 						OutVariant = nullptr;
 					}
-				} else {
+				}
+				else
+				{
 					OutVariant = nullptr;
 				}
 
-				if(OutVariant) {
+				if (OutVariant)
+				{
 					OutType = OutVariant->BodyPartType;
 					return true;
-				} else {
+				}
+				else
+				{
 					OutType = EBodyPartType::None;
 					return false;
 				}
@@ -645,41 +646,17 @@ void UCustomizationComponent::LoadAndProcessBodyParts(FCustomizationContextData&
 					{
 						FinalSlotAssignment.Add(ItemBodyPartType, Slug);
 						UE_LOG(LogCustomizationComponent, Verbose, TEXT("Assigning BodyPartType %s to explicit item '%s' (replacing previous if any)."),
-							*UEnum::GetValueAsString(ItemBodyPartType), *Slug.ToString());
+						       *UEnum::GetValueAsString(ItemBodyPartType), *Slug.ToString());
 					}
-					else {
+					else
+					{
 						UE_LOG(LogCustomizationComponent, Warning, TEXT("Explicit item '%s' resolved to BodyPartType::None. Skipping assignment."), *Slug.ToString());
 					}
 				}
-				else {
+				else
+				{
 					UE_LOG(LogCustomizationComponent, Warning, TEXT("No valid variant found for explicit item '%s'. Skipping assignment."), *Slug.ToString());
 				}
-			}
-
-			// Assign default items for remaining empty slots
-			for (const auto& BodyPartAssetPtr : SomatotypeDataAsset->BodyParts)
-			{
-				if (!BodyPartAssetPtr) continue;
-				FName DefaultSlug = BodyPartAssetPtr->GetPrimaryAssetId().PrimaryAssetName;
-
-				EBodyPartType ItemBodyPartType = EBodyPartType::None;
-				const FBodyPartVariant* ItemVariant = nullptr;
-
-				if (GetVariantInfo(DefaultSlug, ItemBodyPartType, ItemVariant))
-				{
-					if (ItemBodyPartType != EBodyPartType::None)
-					{
-						if (!FinalSlotAssignment.Contains(ItemBodyPartType))
-						{
-							FinalSlotAssignment.Add(ItemBodyPartType, DefaultSlug);
-							UE_LOG(LogCustomizationComponent, Verbose, TEXT("Assigning BodyPartType %s to default item '%s' (slot was empty)."),
-								*UEnum::GetValueAsString(ItemBodyPartType), *DefaultSlug.ToString());
-						}
-                        // else { UE_LOG(LogCustomizationComponent, Verbose, TEXT("BodyPartType %s already assigned by explicit item. Skipping default '%s'."), *UEnum::GetValueAsString(ItemBodyPartType), *DefaultSlug.ToString()); }
-					}
-                    // else { UE_LOG(LogCustomizationComponent, Warning, TEXT("Default item '%s' resolved to BodyPartType::None."), *DefaultSlug.ToString()); }
-				}
-                // else { UE_LOG(LogCustomizationComponent, Warning, TEXT("No valid variant found for default item '%s'."), *DefaultSlug.ToString()); }
 			}
 
 			// Rebuild TargetState based on final assignments
@@ -744,9 +721,9 @@ void UCustomizationComponent::ApplyBodySkin(const FCustomizationContextData& Tar
 	UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying Body Skin..."));
 
 	FSkinFlagCombination SkinVisibilityFlags;
-	for (const auto& Pair : FinalSlugToVariantMap) // Use the map of *actually applied* variants
+	for (const auto& Pair : FinalSlugToVariantMap)
 	{
-		if(Pair.Value) // Check validity
+		if(Pair.Value)
 		{
 			SkinVisibilityFlags.AddFlag(Pair.Value->SkinCoverageFlags.FlagMask);
 		}
@@ -1064,7 +1041,7 @@ void UCustomizationComponent::UpdateDebugInfo()
 	const FVector SkinCoverageLocation	= CharacterLocation + FVector(DebugInfo.HorizontalOffset, 0, DebugInfo.VerticalOffset);											// Above
 	const FVector EquippedItemsLocation = CharacterLocation + FVector(DebugInfo.HorizontalOffset * 2, 0, DebugInfo.VerticalOffset);										// Right
 	const FVector SkinInfoLocation		= CharacterLocation + FVector(0, 0, DebugInfo.VerticalOffset - DebugInfo.OffsetForSecondLine);									// Left, below 
-	const FVector ActorInfoLocation		= CharacterLocation + FVector(DebugInfo.HorizontalOffset * 2, 0, DebugInfo.VerticalOffset - DebugInfo.OffsetForSecondLine);		// Right, below
+	const FVector ActorInfoLocation		= CharacterLocation + FVector(DebugInfo.HorizontalOffset * -2, 0, DebugInfo.VerticalOffset - DebugInfo.OffsetForSecondLine);		// Right, below
 	
 	DrawDebugTextBlock(PendingItemsLocation, DebugInfo.GetBlockText("Pending Items", DebugInfo.PendingItems), OwningCharacter.Get(), FColor::Turquoise);
 	DrawDebugTextBlock(SkinCoverageLocation, DebugInfo.GetBlockText("Skin Coverage", DebugInfo.SkinCoverage), OwningCharacter.Get(), FColor::Green);

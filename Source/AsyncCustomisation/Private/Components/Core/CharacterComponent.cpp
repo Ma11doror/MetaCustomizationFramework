@@ -57,3 +57,8 @@ void UCharacterComponentBase::UpdateOwner()
 		BindCharacter(OwningCharacter.Get());
 	}
 }
+
+ABaseCharacter* UCharacterComponentBase::GetOwningCharacter() const
+{
+	return OwningCharacter.IsValid() ? OwningCharacter.Get() : nullptr;
+}

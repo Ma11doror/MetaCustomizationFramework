@@ -10,7 +10,6 @@ class UCharacterComponentBase : public UActorComponent
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this component's properties
 	UCharacterComponentBase();
 
 	virtual void Activate(bool bReset) override;
@@ -29,6 +28,9 @@ public:
 	//ACharacter* GetOwningCharacter();
 
 	void UpdateOwner();
+	
+	UFUNCTION(BlueprintPure)
+	ABaseCharacter* GetOwningCharacter() const;
 
 protected:
 

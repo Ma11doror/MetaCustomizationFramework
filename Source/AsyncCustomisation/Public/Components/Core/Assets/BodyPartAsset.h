@@ -5,9 +5,6 @@
 #include "Algo/AllOf.h"
 #include "Constants/GlobalConstants.h"
 #include "Engine/DataAsset.h"
-
-//#include "Components/CustomizationComponent.h"
-
 #include "Misc/RuntimeErrors.h"
 #include "AsyncCustomisation/Public/Components/Core/Data.h"
 #include "AsyncCustomisation/Public/Components/Core/BodyPartTypes.h"

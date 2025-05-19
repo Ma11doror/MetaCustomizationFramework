@@ -4,6 +4,7 @@
 #include "AsyncCustomisation/Public/BaseCharacter.h"
 
 #include "Components/CustomizationComponent.h"
+#include "Components/InventoryComponent.h"
 
 ABaseCharacter::ABaseCharacter()
 {
@@ -57,8 +58,10 @@ ABaseCharacter::ABaseCharacter()
 	ensure(HairMesh);
 	HairMesh->SetupAttachment(GetMesh());
 
-	CustomizationComponent = CreateDefaultSubobject<UCustomizationComponent>("CustomizationComponent");
+	CustomizationComponent = CreateDefaultSubobject<UCustomizationComponent>(TEXT("CustomizationComponent"));
 	ensure(CustomizationComponent);
+
+	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 }
 
 void ABaseCharacter::BeginPlay()

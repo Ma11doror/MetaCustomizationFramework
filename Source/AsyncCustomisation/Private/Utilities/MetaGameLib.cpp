@@ -1,10 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "Utilities/MetaGameLib.h"
 
 #include "Components/Core/Somatotypes.h"
 #include "Constants/GlobalConstants.h"
+#include "UI/VM_Inventory.h"
 #include "Utilities/DataTable/DataTableLibraryTypes.h"
 
 FPrimaryAssetId UMetaGameLib::GetDefaultSkinAssetIdBySomatotype(const ESomatotype InType)
@@ -49,4 +47,40 @@ UDataTable* UMetaGameLib::GetDataTableFromLibrary(EDataTableLibraryType InType)
 		}
 	});
 	return Result;
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapToSlot(const TMap<EItemType, FInventoryEquippedItemData>& InMap, const EItemType& InType)
+{
+	auto Item = InMap.Find(InType);
+	return Item ? *Item : FInventoryEquippedItemData();
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHatSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+{
+	auto Item = InMap.Find(EItemType::Hat);
+	return Item ? *Item : FInventoryEquippedItemData();
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBodySlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+{
+	auto Item = InMap.Find(EItemType::Body);
+	return Item ? *Item : FInventoryEquippedItemData();
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapGlovesSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+{
+	auto Item = InMap.Find(EItemType::Wrists);
+	return Item ? *Item : FInventoryEquippedItemData();
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedPantsPantsSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+{
+	auto Item = InMap.Find(EItemType::Legs);
+	return Item ? *Item : FInventoryEquippedItemData();
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapFeetSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+{
+	auto Item = InMap.Find(EItemType::Feet);
+	return Item ? *Item : FInventoryEquippedItemData();
 }

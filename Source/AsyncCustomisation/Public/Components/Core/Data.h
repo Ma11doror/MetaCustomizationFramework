@@ -21,13 +21,23 @@ UENUM(BlueprintType)
 enum class EItemType : uint8
 {
 	None = 0,
+
 	Body,
-	Haircut,
-	Skin,
+	Hat,
+	Head,
+	Feet,
+	Hands,
+	Wrists,
+	Legs,
+	Beard,
 	Ring,
-	Weighting,
+	Skin,
+	Haircut,
 	Bandan,
 	Chain,
+	FaceAccessory,
+	Backpack,
+	Cloak,
 };
 
 ENUM_RANGE_BY_FIRST_AND_LAST(EItemType, EItemType::Body, EItemType::Chain)
@@ -171,7 +181,7 @@ struct FSkinFlagCombination
 	const FString& UpdateDescription()
 	{
 		TArray<FString> ActiveFeatures;
-
+/*
 		if ((FlagMask & (int32)ESkinVisibilityFlag::Wrist) != 0)
 			ActiveFeatures.Add(TEXT("Wrist"));
 		if ((FlagMask & (int32)ESkinVisibilityFlag::Forearm) != 0)
@@ -190,7 +200,19 @@ struct FSkinFlagCombination
 			ActiveFeatures.Add(TEXT("Hip"));
 		if ((FlagMask & (int32)ESkinVisibilityFlag::Feet) != 0)
 			ActiveFeatures.Add(TEXT("Feet"));
+*/
 
+		if (HasFlag(ESkinVisibilityFlag::Wrist)) ActiveFeatures.Add(TEXT("Wrist"));
+		if (HasFlag(ESkinVisibilityFlag::Forearm)) ActiveFeatures.Add(TEXT("Forearm"));
+		if (HasFlag(ESkinVisibilityFlag::Elbow)) ActiveFeatures.Add(TEXT("Elbow"));
+		if (HasFlag(ESkinVisibilityFlag::Shoulder)) ActiveFeatures.Add(TEXT("Shoulder"));
+		if (HasFlag(ESkinVisibilityFlag::Torso)) ActiveFeatures.Add(TEXT("Torso"));
+		if (HasFlag(ESkinVisibilityFlag::Pelvis)) ActiveFeatures.Add(TEXT("Pelvis"));
+		if (HasFlag(ESkinVisibilityFlag::Hip)) ActiveFeatures.Add(TEXT("Hip"));
+		if (HasFlag(ESkinVisibilityFlag::Knee)) ActiveFeatures.Add(TEXT("Knee"));
+		if (HasFlag(ESkinVisibilityFlag::Ankle)) ActiveFeatures.Add(TEXT("Ankle"));
+		if (HasFlag(ESkinVisibilityFlag::Feet)) ActiveFeatures.Add(TEXT("Feet"));
+		if (HasFlag(ESkinVisibilityFlag::None)) ActiveFeatures.Add(TEXT("NoneFlag"));
 
 		if (ActiveFeatures.Num() > 0)
 		{
@@ -198,7 +220,7 @@ struct FSkinFlagCombination
 		}
 		else
 		{
-			FlagDescription = TEXT("None");
+			FlagDescription = GLOBAL_CONSTANTS::NONE_STRING;
 		}
 		return FlagDescription;
 	}
@@ -248,30 +270,47 @@ struct FSkinFlagCombination
 		FlagMask = 0;
 		FlagDescription = {};
 	}
-	
+
 	FString ToString()
 	{
 		TArray<FString> ActiveFeatures;
-		
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Wrist) != 0)
-			ActiveFeatures.Add(TEXT("Wrist"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Forearm) != 0)
-			ActiveFeatures.Add(TEXT("Forearm"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Elbow) != 0)
-			ActiveFeatures.Add(TEXT("Elbow"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Shoulder) != 0)
-			ActiveFeatures.Add(TEXT("Shoulder"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Torso) != 0)
-			ActiveFeatures.Add(TEXT("Torso"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Ankle) != 0)
-			ActiveFeatures.Add(TEXT("Ankle"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Knee) != 0)
-			ActiveFeatures.Add(TEXT("Knee"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Hip) != 0)
-			ActiveFeatures.Add(TEXT("Hip"));
-		if ((FlagMask & (int32)ESkinVisibilityFlag::Feet) != 0)
-			ActiveFeatures.Add(TEXT("Feet"));
 
+
+		/*
+		 *
+		
+				*if ((FlagMask & (int32)ESkinVisibilityFlag::Wrist) != 0)
+							ActiveFeatures.Add(TEXT("Wrist"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Forearm) != 0)
+							ActiveFeatures.Add(TEXT("Forearm"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Elbow) != 0)
+							ActiveFeatures.Add(TEXT("Elbow"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Shoulder) != 0)
+							ActiveFeatures.Add(TEXT("Shoulder"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Torso) != 0)
+							ActiveFeatures.Add(TEXT("Torso"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Ankle) != 0)
+							ActiveFeatures.Add(TEXT("Ankle"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Knee) != 0)
+							ActiveFeatures.Add(TEXT("Knee"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Hip) != 0)
+							ActiveFeatures.Add(TEXT("Hip"));
+						if ((FlagMask & (int32)ESkinVisibilityFlag::Feet) != 0)
+							ActiveFeatures.Add(TEXT("Feet"));
+		 * 
+		 */
+		if (HasFlag(ESkinVisibilityFlag::Wrist)) ActiveFeatures.Add(TEXT("Wrist"));
+		if (HasFlag(ESkinVisibilityFlag::Forearm)) ActiveFeatures.Add(TEXT("Forearm"));
+		if (HasFlag(ESkinVisibilityFlag::Elbow)) ActiveFeatures.Add(TEXT("Elbow"));
+		if (HasFlag(ESkinVisibilityFlag::Shoulder)) ActiveFeatures.Add(TEXT("Shoulder"));
+		if (HasFlag(ESkinVisibilityFlag::Torso)) ActiveFeatures.Add(TEXT("Torso"));
+		if (HasFlag(ESkinVisibilityFlag::Pelvis)) ActiveFeatures.Add(TEXT("Pelvis"));
+		if (HasFlag(ESkinVisibilityFlag::Hip)) ActiveFeatures.Add(TEXT("Hip"));
+		if (HasFlag(ESkinVisibilityFlag::Knee)) ActiveFeatures.Add(TEXT("Knee"));
+		if (HasFlag(ESkinVisibilityFlag::Ankle)) ActiveFeatures.Add(TEXT("Ankle"));
+		if (HasFlag(ESkinVisibilityFlag::Feet)) ActiveFeatures.Add(TEXT("Feet"));
+		if (HasFlag(ESkinVisibilityFlag::None)) ActiveFeatures.Add(TEXT("NoneFlag"));
+		
 		FString Result = FString::Printf(TEXT("Flags (Mask: %d):\n"), FlagMask);
 		if (ActiveFeatures.Num() > 0)
 		{

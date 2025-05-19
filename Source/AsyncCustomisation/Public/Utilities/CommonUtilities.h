@@ -11,7 +11,7 @@ using namespace GLOBAL_CONSTANTS;
 
 namespace CommonUtilities
 {
-	inline FPrimaryAssetId ItemSlugToCustomizationAssetId(const FName& InSlug, const ESomatotype InSomatotype = ESomatotype::None)
+	inline FPrimaryAssetId ItemSlugToCustomizationAssetId(const FName& InSlug)
 	{
 		FPrimaryAssetId ItemCustomizationAssetId = NONE_ASSET_ID;
 		const UItemMetaAsset* ItemMetaAsset = UCustomizationAssetManager::LoadItemMetaAssetSync(InSlug);
@@ -21,22 +21,13 @@ namespace CommonUtilities
 			ItemCustomizationAssetId = ItemMetaAsset->CustomizationAssetId;
 		}
 
-		//TODO:: deprecated
-		//if (ItemMetaAsset && InSomatotype != ESomatotype::None)
-		//{
-		//	if (const FPrimaryAssetId* FoundCustomizationItem = ItemMetaAsset->BySomatotypeBodyPartAssetId.Find(InSomatotype))
-		//	{
-		//		ItemCustomizationAssetId = *FoundCustomizationItem;
-		//	}
-		//}
 		return ItemCustomizationAssetId;
 	}
 	
 	inline FPrimaryAssetId ItemSlugToAssetId(const FName& InSlug)
 	{
 		FPrimaryAssetId AssetId = {};
-		UE_LOG(LogTemp, Warning, TEXT("Attempting to create AssetId with slug: %s (Length: %d)"), 
-	   *InSlug.ToString(), InSlug.ToString().Len());
+		UE_LOG(LogTemp, Warning, TEXT("Attempting to create AssetId with slug: %s (Length: %d)"), *InSlug.ToString(), InSlug.ToString().Len());
 
 		if (!InSlug.IsValid())
 		{

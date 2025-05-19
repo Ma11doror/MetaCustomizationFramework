@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AsyncCustomisation/Public/Constants/GlobalConstants.h"
+
 #include "Engine/DataAsset.h"
 #include "ItemMetaAsset.generated.h"
 
@@ -18,10 +19,16 @@ public:
 	TSoftObjectPtr<UTexture2D> Icon_Big;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (MultiLine = true))
-	FText Name;
+	FName Name;
 
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (MultiLine = true))
 	FText Description;
+	
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable)) 
+	EItemType ItemType = EItemType::None;
+
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable)) 
+	EItemTier ItemTier = EItemTier::Common;
 
 	// NOTE: ReadWrite only for Editor Utilities
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, AssetRegistrySearchable)
