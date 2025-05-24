@@ -1,8 +1,12 @@
 #include "UI/Inventory/InventoryWidget.h"
+
+#include "ISkeletonTreeItem.h"
+#include "BaseGizmos/GizmoElementShared.h"
 #include "UI/Inventory/Components/ItemSlotWidget.h"
 #include "Components/VerticalBox.h"
 #include "CommonUI/Public/CommonAnimatedSwitcher.h"
 #include "CommonUI/Public/CommonListView.h"
+#include "Components/Overlay.h"
 #include "Meta/PlayerControllerBase.h"
 #include "UI/VM_Inventory.h"
 #include "UI/Inventory/Data/InventoryListItemData.h"
@@ -16,7 +20,6 @@ UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
 void UInventoryWidget::NativeDestruct()
 {
     Super::NativeDestruct();
- 
 }
 
 void UInventoryWidget::NativeOnInitialized()
@@ -59,9 +62,25 @@ void UInventoryWidget::OnItemSlotClicked(UCommonButtonBase* AssociatedButton, in
     ensure(SlotButton);
     ensureAlwaysMsgf(InventoryViewModel, TEXT("UInventoryWidget::OnItemSlotClicked: InventoryViewModel is null!"));
     ensureAlwaysMsgf(InventorySwitcher, TEXT("UInventoryWidget::OnItemSlotClicked: InventorySwitcher is null!"));
+    
+    SetActiveInventoryTab(EInventorySwitcherTab::ItemsListView);
+    InventorySwitcher->OnTransitioningChanged.AddWeakLambda(this, [this, SlotButton, InModel = InventoryViewModel](const bool IsTransitioning)
+    {
+        if (IsTransitioning) return;
 
-    InventoryViewModel->FilterBySlot(SlotButton->GetSlotType()); 
-    InventorySwitcher->SetActiveWidgetIndex(1);
+        if (!IsValid(InModel) || !IsValid(SlotButton) || !IsValid(this))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("UInventoryWidget::OnItemSlotClicked - InventorySwitcher transition finished, but some captured objects are invalid."));
+        }
+            
+        InModel->FilterBySlot(SlotButton->GetSlotType());
+        OnListTabOpened();
+           
+        if (IsValid(InventorySwitcher)) 
+        {
+             InventorySwitcher->OnTransitioningChanged.RemoveAll(this);
+        }
+    });
 }
 
 void UInventoryWidget::ConstructButtons()
@@ -113,9 +132,18 @@ void UInventoryWidget::OnBackButtonClicked()
     else
     {
         SetActiveInventoryTab(EInventorySwitcherTab::SlotsView);
+        
+        /*
+         * WORKAROUND: Addresses a visual glitch in the WidgetSwitcher where items from the
+         * previously active tab remain visible for a single frame after switching to a new
+         * items tab.
+         * To mitigate this, when navigating away from an items tab (e.g., back to the main
+         * inventory view or another category), the filter is cleared. This ensures
+         * all items are initially hidden when a new items tab is subsequently opened,
+         * preventing the "ghosting" of previous tab's items before the new filter is applied.
+         */
+        InventoryViewModel->FilterBySlot(EItemType::None);
     }
-
-
     /*switch (static_cast<EInventorySwitcherTab>(InventorySwitcher->GetActiveWidgetIndex()))
     {
     case EInventorySwitcherTab::SlotsView:
@@ -134,6 +162,17 @@ void UInventoryWidget::OnBackButtonClicked()
     */
 }
 
+void UInventoryWidget::OnListTabOpened()
+{
+    const auto Found = ItemsList->GetDisplayedEntryWidgets().FindByPredicate([](const UUserWidget* Item)
+    {
+        return IsValid(Item) && Item->GetVisibility() != ESlateVisibility::Collapsed;
+    });
+    EmptyListPlaceholder->SetVisibility(Found
+                                            ? ESlateVisibility::Collapsed
+                                            : ESlateVisibility::Visible);
+}
+
 void UInventoryWidget::SetActiveInventoryTab(EInventorySwitcherTab Tab)
 {
     if (!InventorySwitcher)
@@ -147,14 +186,11 @@ void UInventoryWidget::SetActiveInventoryTab(EInventorySwitcherTab Tab)
         InventorySwitcher->SetActiveWidgetIndex(0);
         break;
     case EInventorySwitcherTab::ItemsListView:
-        ItemsList->GetDisplayedEntryWidgets().Num() > 0
-            ? InventorySwitcher->SetActiveWidgetIndex(1)
-            : InventorySwitcher->SetActiveWidgetIndex(2);
-        
+        InventorySwitcher->SetActiveWidgetIndex(1);
+        //OnListTabOpened();
+        //GetWorld()->GetTimerManager().SetTimerForNextTick(this, &ThisClass::OnListTabOpened);
         break;
-    case EInventorySwitcherTab::NoItemsView:
-        InventorySwitcher->SetActiveWidgetIndex(2);
-        break;
+
     default:
         UE_LOG(LogTemp, Warning, TEXT("Unknown EInventorySwitcherTab value!"));
     }

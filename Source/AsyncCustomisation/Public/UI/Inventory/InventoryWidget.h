@@ -30,8 +30,7 @@ UENUM(BlueprintType)
 enum class EInventorySwitcherTab : uint8
 {
     SlotsView     UMETA(DisplayName = "Slots View"),
-    ItemsListView UMETA(DisplayName = "Items List View"),
-    NoItemsView   UMETA(DisplayName = "No Items View")
+    ItemsListView UMETA(DisplayName = "Items List View")
 };
 
 UCLASS()
@@ -67,6 +66,8 @@ protected:
 
     UFUNCTION(BlueprintImplementableEvent)
     void PlayFailEquipAnimation();
+    
+    void OnListTabOpened();
 
     UPROPERTY()
     APlayerControllerBase* PlayerController;
@@ -115,4 +116,6 @@ protected:
     UPROPERTY(BlueprintReadWrite, meta = (BindWidget))
     UVerticalBox* RightTabsBox;
 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (BindWidget))
+    TObjectPtr<UOverlay> EmptyListPlaceholder = nullptr;
 };

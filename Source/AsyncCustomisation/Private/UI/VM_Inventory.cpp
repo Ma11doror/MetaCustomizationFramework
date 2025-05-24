@@ -1050,7 +1050,8 @@ void UVM_Inventory::PopulateViewModelProperties()
 						FDelegateHandle Handle = VM->OnFilterMethodChanged.AddWeakLambda(SubscriberWidget,
 						                                                                 [WidgetHandler](EItemType FilterType)
 						                                                                 {
-							                                                                 if (WidgetHandler) WidgetHandler(FilterType);
+						                                                                 	ensureAlways(WidgetHandler);
+						                                                                 	WidgetHandler(FilterType);
 						                                                                 }
 						);
 
@@ -1085,9 +1086,6 @@ void UVM_Inventory::PopulateViewModelProperties()
 		}
 	}
 	UE_LOG(LogViewModel, Verbose, TEXT("PopulateViewModelProperties: Finished processing owned items. List size: %d"), NewList.Num());
-
-	// sort here maybe?
-	// NewInventoryList.Sort(...);
 
 	SetInventoryItemsList(NewList);
 	SetEquippedItemsMap(NewEquippedMap);
@@ -1138,67 +1136,34 @@ void UVM_Inventory::FilterBySlot(const EItemType DesiredSlotType)
 {
     if (!IsValid(this))
     {
-	    UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - THIS (ViewModel) IS INVALID!"));
-	    return;
+        UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - THIS (ViewModel) IS INVALID!"));
+        return;
     }
-	
-    LastFilterType = DesiredSlotType;
 
-    FOnFilterMethodChanged LocalTestDelegate;
-    FDelegateHandle LocalTestDelegateHandle;
+    LastFilterType = DesiredSlotType; 
 	
-    try // don't ask
+    if (OnFilterMethodChanged.IsBound())
     {
-        LocalTestDelegateHandle = LocalTestDelegate.AddLambda(
-            [this](EItemType TestFilterType)
-            {
-                if(!IsValid(this)) { UE_LOG(LogTemp, Error, TEXT("LocalTestDelegate Lambda: ViewModel 'this' became invalid!")); return; }
-                UE_LOG(LogTemp, Log, TEXT("LocalTestDelegate Lambda Called from ViewModel %s with Type: %d"), *this->GetName(), static_cast<int32>(TestFilterType));
-            }
-        );
-        if (!LocalTestDelegateHandle.IsValid())
-        {
-             UE_LOG(LogTemp, Error, TEXT("LocalTestDelegate: Failed to AddLambda!"));
-        }
-        else
-        {
-            UE_LOG(LogTemp, Log, TEXT("LocalTestDelegate: Broadcasting..."));
-            LocalTestDelegate.Broadcast(DesiredSlotType);
-            UE_LOG(LogTemp, Log, TEXT("LocalTestDelegate: Broadcast finished."));
-            LocalTestDelegate.Remove(LocalTestDelegateHandle);
-        }
-    }
-    catch (const std::exception& e) 
-    {
-        UE_LOG(LogTemp, Error, TEXT("LocalTestDelegate broadcast test CRASHED (std::exception: %s)."), ANSI_TO_TCHAR(e.what()));
-    }
-    catch (...) 
-    {
-        UE_LOG(LogTemp, Error, TEXT("LocalTestDelegate broadcast test CRASHED (unknown exception)."));
-    }
-	
-    if (OnFilterMethodChanged.IsBound()) 
-    {
+        UE_LOG(LogTemp, Log, TEXT("UVM_Inventory::FilterBySlot - Broadcasting OnFilterMethodChanged with type: %s"), *UEnum::GetValueAsString(DesiredSlotType));
         try
         {
             OnFilterMethodChanged.Broadcast(DesiredSlotType);
-            UE_LOG(LogTemp, Display, TEXT("OnFilterMethodChanged: Broadcast finished successfully."));
+            UE_LOG(LogTemp, Display, TEXT("UVM_Inventory::FilterBySlot - OnFilterMethodChanged: Broadcast finished successfully."));
         }
         catch (const std::exception& e)
         {
-            UE_LOG(LogTemp, Error, TEXT("EXCEPTION OnFilterMethodChanged.Broadcast (std::exception: %s)."), ANSI_TO_TCHAR(e.what()));
-            UE_LOG(LogTemp, Error, TEXT("Address of OnFilterMethodChanged: %p"), &OnFilterMethodChanged);
+            UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - EXCEPTION during OnFilterMethodChanged.Broadcast (std::exception: %s). FilterType: %s"), ANSI_TO_TCHAR(e.what()), *UEnum::GetValueAsString(DesiredSlotType));
         }
         catch (...)
         {
-            UE_LOG(LogTemp, Error, TEXT("EXCEPTION during OnFilterMethodChanged.Broadcast (unknown exception)."));
-            UE_LOG(LogTemp, Error, TEXT("Address of OnFilterMethodChanged: %p"), &OnFilterMethodChanged);
+            UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - UNKNOWN EXCEPTION during OnFilterMethodChanged.Broadcast. FilterType: %s"), *UEnum::GetValueAsString(DesiredSlotType));
         }
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("Skipped OnFilterMethodChanged.Broadcast because IsBound was false."));
+        UE_LOG(LogTemp, Warning, TEXT("UVM_Inventory::FilterBySlot - Skipped OnFilterMethodChanged.Broadcast because IsBound was false. FilterType: %s"), *UEnum::GetValueAsString(DesiredSlotType));
     }
+	
 }
 
 void UVM_Inventory::UnbindDelegates()
