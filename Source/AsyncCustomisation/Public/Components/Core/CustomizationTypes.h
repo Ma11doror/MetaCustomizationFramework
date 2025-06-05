@@ -15,11 +15,28 @@ struct FEquippedItemActorsInfo
 	GENERATED_BODY()
 
 	FName ItemSlug = NAME_None;
-	TArray<TStrongObjectPtr<AActor>> ItemRelatedActors = {};
+	TArray<TWeakObjectPtr<AActor>> ItemRelatedActors;
 
 	bool operator==(const FEquippedItemActorsInfo& Other) const { return this->ItemSlug == Other.ItemSlug; }
 	bool operator!=(const FEquippedItemActorsInfo& Other) const { return !(*this == Other); }
 
+	void Clear()
+	{
+		for (TWeakObjectPtr<AActor>& ActorPtr : ItemRelatedActors)
+		{
+			if (AActor* ValidActor = ActorPtr.Get())
+			{
+				if (IsValid(ValidActor) && !ValidActor->IsGarbageEliminationEnabled())
+				{
+					// UE_LOG(LogTemp, Log, TEXT("FCustomizationContextData::ClearAttachedActors: Destroying actor %s from item %s"), *ValidActor->GetName(), *ItemInfo.ItemSlug.ToString());
+					ValidActor->Destroy();
+				}
+			}
+		}
+		ItemRelatedActors.Empty();
+	}
+
+	
 	FString ToString() const
 	{
 		FString ActorNames;
@@ -57,10 +74,19 @@ struct FEquippedItemsInSlotInfo
 {
 	GENERATED_BODY()
 
+	UPROPERTY()
 	TArray<FEquippedItemActorsInfo> EquippedItemActors;
 
 	bool operator==(const FEquippedItemsInSlotInfo& Other) const { return this->EquippedItemActors == Other.EquippedItemActors; }
 	bool operator!=(const FEquippedItemsInSlotInfo& Other) const { return !(*this == Other); }
+
+	void Clear()
+	{
+		for (auto& Iter : EquippedItemActors)
+		{
+			Iter.Clear();
+		}
+	}
 	
 	FString ToString() const
 	{
@@ -132,6 +158,18 @@ public:
 	
 	//[Skin] VFX customization
 	FCharacterVFXCustomization VFXCustomization = {};
+
+	void ClearAttachedActors()
+	{
+		UE_LOG(LogTemp, Warning, TEXT("FCustomizationContextData::ClearAttachedActors - Clearing %d slots."), EquippedCustomizationItemActors.Num());
+		for (auto& SlotPair : EquippedCustomizationItemActors)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("FCustomizationContextData::ClearAttachedActors - Clearing slot %s."), *UEnum::GetValueAsString(SlotPair.Key));
+			SlotPair.Value.Clear();
+		}
+
+		 EquippedCustomizationItemActors.Empty();
+	}
 	
 	TArray<FName> GetEquippedSlugs() const
 	{
@@ -176,17 +214,19 @@ public:
 	}
 
 	
-	void ReplaceOrAddSpawnedActors(const FName& ItemSlug, ECustomizationSlotType SlotType, const TArray<TStrongObjectPtr<AActor>>& Actors)
+	void ReplaceOrAddSpawnedActors(const FName& InItemSlug, ECustomizationSlotType InSlotType, const TArray<TWeakObjectPtr<AActor>>& InActors)
 	{
-		TArray<FEquippedItemActorsInfo>& ActorsInSlot = EquippedCustomizationItemActors.FindOrAdd(SlotType).EquippedItemActors;
-		if (FEquippedItemActorsInfo* ActorsInfo = ActorsInSlot.FindByPredicate(
-				[&ItemSlug](const FEquippedItemActorsInfo& ActorsInfo) { return ActorsInfo.ItemSlug == ItemSlug; }))
+		FEquippedItemsInSlotInfo& SlotInfo = EquippedCustomizationItemActors.FindOrAdd(InSlotType);
+		FEquippedItemActorsInfo* FoundItem = SlotInfo.EquippedItemActors.FindByPredicate(
+			[&InItemSlug](const FEquippedItemActorsInfo& Info){ return Info.ItemSlug == InItemSlug; });
+		
+		if (FoundItem)
 		{
-			ActorsInfo->ItemRelatedActors = Actors;
+			FoundItem->ItemRelatedActors = InActors;
 		}
 		else
 		{
-			ActorsInSlot.Add({ ItemSlug, Actors });
+			SlotInfo.EquippedItemActors.Add({InItemSlug, InActors});
 		}
 	}
 
@@ -314,14 +354,17 @@ public:
 		if (IfAny([](auto& Any) { return Any.Somatotype != ESomatotype::None; }))
 		{
 			EnumAddFlags(Reason, ECustomizationInvalidationReason::All);
+			UE_LOG(LogTemp, Log, TEXT("CalculateReason: Somatotype changed, Reason is All."));
 		}
 		if (IfAny([](auto& Any) { return Any.EquippedMaterialsMap.Num() > 0; }))
 		{
 			EnumAddFlags(Reason, ECustomizationInvalidationReason::Skin);
+			UE_LOG(LogTemp, Log, TEXT("CalculateReason: Materials changed, Added Skin flag."));
 		}
 		if (IfAny([](auto& Any) { return Any.EquippedBodyPartsItems.Num() > 0; }))
 		{
 			EnumAddFlags(Reason, ECustomizationInvalidationReason::Body);
+			UE_LOG(LogTemp, Log, TEXT("CalculateReason: BodyParts changed, Added Body flag."));
 
 			// Remove flag because we call SkinInvalidation after Body invalidation
 			EnumRemoveFlags(Reason, ECustomizationInvalidationReason::Skin);
@@ -329,7 +372,7 @@ public:
 		if (IfAny([](auto& Any) { return Any.EquippedCustomizationItemActors.Num() > 0; }))
 		{
 			EnumAddFlags(Reason, ECustomizationInvalidationReason::Actors);
-
+			UE_LOG(LogTemp, Log, TEXT("CalculateReason: Actors changed, Added Actors flag."));
 			// Invalidate BodyParts because maybe we need occure another variant instead current
 			EnumAddFlags(Reason, ECustomizationInvalidationReason::Body);
 
@@ -339,64 +382,118 @@ public:
 		return Reason;
 	}
 	
-void CheckDiff(const FCustomizationContextData& New)
+void CheckDiff(const FCustomizationContextData& NewState, const FCustomizationContextData& OldStateToCompareAgainst)
 {
 	Added = FCustomizationContextData();
-	Removed = FCustomizationContextData();
+    Removed = FCustomizationContextData();
+    
+    UE_LOG(LogTemp, Log, TEXT("CheckDiff: START. OldState Somato: %s, NewState Somato: %s"), 
+        *UEnum::GetValueAsString(OldStateToCompareAgainst.Somatotype), 
+        *UEnum::GetValueAsString(NewState.Somatotype));
+    UE_LOG(LogTemp, Log, TEXT("CheckDiff: OldState BodyParts Num: %d, NewState BodyParts Num: %d"), 
+        OldStateToCompareAgainst.EquippedBodyPartsItems.Num(), 
+        NewState.EquippedBodyPartsItems.Num());
 
-	// Compare EquippedBodyPartsItems 
-	TSet<FName> CurrentSlugs;
-	TSet<FName> NewSlugs;
+    TSet<FName> OldSlugs, NewSlugs;
+    for (const auto& Pair : OldStateToCompareAgainst.EquippedBodyPartsItems) OldSlugs.Add(Pair.Key);
+    for (const auto& Pair : NewState.EquippedBodyPartsItems) NewSlugs.Add(Pair.Key);
 
-	for (const auto& [Slug, PartType] : Current.EquippedBodyPartsItems)
-	{
-		CurrentSlugs.Add(Slug);
-	}
+    TSet<FName> AddedSlugsSet = NewSlugs.Difference(OldSlugs);
+    for (const FName& Slug : AddedSlugsSet)
+    {
+        Added.EquippedBodyPartsItems.Add(Slug, NewState.EquippedBodyPartsItems.FindChecked(Slug));
+        UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Added BodyPart Slug: %s. Type: %s"), *Slug.ToString(), *UEnum::GetValueAsString(NewState.EquippedBodyPartsItems.FindChecked(Slug)));
+    }
 
-	for (const auto& [Slug, PartType] : New.EquippedBodyPartsItems)
-	{
-		NewSlugs.Add(Slug);
-	}
+    TSet<FName> RemovedSlugsSet = OldSlugs.Difference(NewSlugs);
+    for (const FName& Slug : RemovedSlugsSet)
+    {
+        Removed.EquippedBodyPartsItems.Add(Slug, OldStateToCompareAgainst.EquippedBodyPartsItems.FindChecked(Slug)); 
+        UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Removed BodyPart Slug: %s. Type: %s"), *Slug.ToString(), *UEnum::GetValueAsString(OldStateToCompareAgainst.EquippedBodyPartsItems.FindChecked(Slug)));
+    }
+		
+    if (OldStateToCompareAgainst.EquippedCustomizationItemActors != NewState.EquippedCustomizationItemActors)
+    {
+        TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo> AddedActors;
+        TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo> RemovedActors;
 
-	// added slugs
-	TSet<FName> AddedSlugs = NewSlugs.Difference(CurrentSlugs);
-	for (const FName& Slug : AddedSlugs)
-	{
-		Added.EquippedBodyPartsItems.Add(Slug, New.EquippedBodyPartsItems.FindChecked(Slug));
-		UE_LOG(LogTemp, Warning, TEXT("Added.EquippedBodyPartsItems:: Added Item %s. BodyPartType: %s"), *Slug.ToString(), *UEnum::GetValueAsString(New.EquippedBodyPartsItems.FindChecked(Slug)));
-	}
+        for (const auto& NewPair : NewState.EquippedCustomizationItemActors)
+        {
+            const FEquippedItemsInSlotInfo* OldSlotInfo = OldStateToCompareAgainst.EquippedCustomizationItemActors.Find(NewPair.Key);
+            if (!OldSlotInfo)
+            {
+                AddedActors.Add(NewPair.Key, NewPair.Value);
+            }
+            else 
+            {
+                FEquippedItemsInSlotInfo TempAddedItems;
+                for(const auto& NewItemActorInfo : NewPair.Value.EquippedItemActors)
+                {
+                    if(!OldSlotInfo->EquippedItemActors.ContainsByPredicate(
+                        [&](const FEquippedItemActorsInfo& OldItem){ return OldItem.ItemSlug == NewItemActorInfo.ItemSlug; }))
+                    {
+                        TempAddedItems.EquippedItemActors.Add(NewItemActorInfo);
+                    }
+                }
+                if(TempAddedItems.EquippedItemActors.Num() > 0) AddedActors.Add(NewPair.Key, TempAddedItems);
+            }
+        }
+        for (const auto& OldPair : OldStateToCompareAgainst.EquippedCustomizationItemActors)
+        {
+            const FEquippedItemsInSlotInfo* NewSlotInfo = NewState.EquippedCustomizationItemActors.Find(OldPair.Key);
+            if (!NewSlotInfo)
+            {
+                RemovedActors.Add(OldPair.Key, OldPair.Value);
+            }
+            else
+            {
+                FEquippedItemsInSlotInfo TempRemovedItems;
+                for(const auto& OldItemActorInfo : OldPair.Value.EquippedItemActors)
+                {
+                     if(!NewSlotInfo->EquippedItemActors.ContainsByPredicate(
+                        [&](const FEquippedItemActorsInfo& NewItem){ return NewItem.ItemSlug == OldItemActorInfo.ItemSlug; }))
+                    {
+                        TempRemovedItems.EquippedItemActors.Add(OldItemActorInfo);
+                    }
+                }
+                if(TempRemovedItems.EquippedItemActors.Num() > 0) RemovedActors.Add(OldPair.Key, TempRemovedItems);
+            }
+        }
+        if(AddedActors.Num() > 0) Added.EquippedCustomizationItemActors = AddedActors;
+        if(RemovedActors.Num() > 0) Removed.EquippedCustomizationItemActors = RemovedActors;
 
-	// removed slugs
-	TSet<FName> RemovedSlugs = CurrentSlugs.Difference(NewSlugs);
-	for (const FName& Slug : RemovedSlugs)
-	{
-		Removed.EquippedBodyPartsItems.Add(Slug, Current.EquippedBodyPartsItems.FindChecked(Slug));
-		UE_LOG(LogTemp, Warning, TEXT("Removed.EquippedBodyPartsItems:: Added Item %s. BodyPartType: %s"), *Slug.ToString(), *UEnum::GetValueAsString(Current.EquippedBodyPartsItems.FindChecked(Slug)));
-	}
+        if (AddedActors.Num() > 0 || RemovedActors.Num() > 0) {
+             UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedCustomizationItemActors changed. Added maps: %d, Removed maps: %d"), AddedActors.Num(), RemovedActors.Num());
+        }
+    }
+		
+    if (OldStateToCompareAgainst.EquippedMaterialsMap != NewState.EquippedMaterialsMap)
+    {
+        for(const auto& NewMatPair : NewState.EquippedMaterialsMap) {
+            if(!OldStateToCompareAgainst.EquippedMaterialsMap.Contains(NewMatPair.Key)) {
+                Added.EquippedMaterialsMap.Add(NewMatPair.Key, NewMatPair.Value);
+            }
+        }
+        for(const auto& OldMatPair : OldStateToCompareAgainst.EquippedMaterialsMap) {
+            if(!NewState.EquippedMaterialsMap.Contains(OldMatPair.Key)) {
+                Removed.EquippedMaterialsMap.Add(OldMatPair.Key, OldMatPair.Value);
+            }
+        }
+        if(Added.EquippedMaterialsMap.Num() > 0 || Removed.EquippedMaterialsMap.Num() > 0) {
+            UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedMaterialsMap changed. Added: %d, Removed: %d"), Added.EquippedMaterialsMap.Num(), Removed.EquippedMaterialsMap.Num());
+        }
+    }
 
-	//  Customization actors 
-	if (Current.EquippedCustomizationItemActors != New.EquippedCustomizationItemActors)
-	{
-		Added.EquippedCustomizationItemActors = New.EquippedCustomizationItemActors;
-		Removed.EquippedCustomizationItemActors = Current.EquippedCustomizationItemActors;
-	}
+    // Somatotype
+    if (OldStateToCompareAgainst.Somatotype != NewState.Somatotype)
+    {
+        if (NewState.Somatotype != ESomatotype::None) Added.Somatotype = NewState.Somatotype;
+        if (OldStateToCompareAgainst.Somatotype != ESomatotype::None) Removed.Somatotype = OldStateToCompareAgainst.Somatotype; 
+        UE_LOG(LogTemp, Log, TEXT("CheckDiff: Somatotype changed from %s to %s."), *UEnum::GetValueAsString(OldStateToCompareAgainst.Somatotype), *UEnum::GetValueAsString(NewState.Somatotype));
+    }
 
-	// Materials Map
-	if (Current.EquippedMaterialsMap != New.EquippedMaterialsMap)
-	{
-		Added.EquippedMaterialsMap = New.EquippedMaterialsMap;
-		Removed.EquippedMaterialsMap = Current.EquippedMaterialsMap;
-	}
-
-	// Somatotype
-	if (Current.Somatotype != New.Somatotype)
-	{
-		Added.Somatotype = New.Somatotype;
-		Removed.Somatotype = Current.Somatotype;
-	}
-
-	//Update current
-	Current = New;
+    this->Current = NewState; 
+    UE_LOG(LogTemp, Log, TEXT("CheckDiff: END. InvalidationContext.Current updated to NewState."));
 }
 	void ClearTemporaryContext()
 	{

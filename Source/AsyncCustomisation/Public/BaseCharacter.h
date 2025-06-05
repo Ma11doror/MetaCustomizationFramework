@@ -44,7 +44,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
 	USkeletalMeshComponent* BeardMesh;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* GoatMesh;
+	USkeletalMeshComponent* TorsoMesh;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
 	USkeletalMeshComponent* NeckMesh;
 	

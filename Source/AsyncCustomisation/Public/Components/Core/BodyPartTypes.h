@@ -26,5 +26,5 @@ enum class EBodyPartType : uint8
 	Hair                    = 14,
 	Other                   = 15
 };
-//DEFINE_ENUM_TO_STRING(EBodyPartType)
+// DEFINE_ENUM_TO_STRING(EBodyPartType, "BodyPartType")
 ENUM_RANGE_BY_FIRST_AND_LAST(EBodyPartType, EBodyPartType::None, EBodyPartType::Other)

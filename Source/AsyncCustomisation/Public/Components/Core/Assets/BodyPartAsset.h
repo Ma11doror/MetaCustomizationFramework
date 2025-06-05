@@ -58,7 +58,7 @@ public:
 		return FPrimaryAssetId(GLOBAL_CONSTANTS::PrimaryBodyPartAssetType, GetFName());
 	}
 
-	FBodyPartVariant* GetMatchedVariant(TArray<FPrimaryAssetId> EquippedItemAssetIds)
+	const FBodyPartVariant* GetMatchedVariant(TArray<FPrimaryAssetId> EquippedItemAssetIds) const
 	{
 		auto* MatchedVariantPtr = Variants.FindByPredicate([EquippedItemAssetIds](const FBodyPartVariant& InVariant)
 		{

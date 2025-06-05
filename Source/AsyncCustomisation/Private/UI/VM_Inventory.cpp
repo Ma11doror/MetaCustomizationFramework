@@ -1121,7 +1121,8 @@ void UVM_Inventory::BeginDestroy()
 
 	LoadedMetaCache.Empty();
 	LastKnownOwnedItems.Empty();
-	// LastKnownCustomizationState = FCustomizationContextData();
+	LastKnownCustomizationState.ClearAttachedActors();
+	LastKnownCustomizationState = FCustomizationContextData();
 
 	Super::BeginDestroy();
 }

@@ -1,7 +1,5 @@
 #include "UI/Inventory/InventoryWidget.h"
 
-#include "ISkeletonTreeItem.h"
-#include "BaseGizmos/GizmoElementShared.h"
 #include "UI/Inventory/Components/ItemSlotWidget.h"
 #include "Components/VerticalBox.h"
 #include "CommonUI/Public/CommonAnimatedSwitcher.h"
@@ -41,7 +39,9 @@ void UInventoryWidget::NativeOnActivated()
     }
     InventorySlotsButtonGroup->OnButtonBaseClicked.AddUniqueDynamic(this, &ThisClass::OnItemSlotClicked);
     ItemsList->OnItemClicked().AddUObject(this, &ThisClass::OnListItemClicked);
-
+    
+    //InventoryViewModel->OnFilterMethodChanged.AddUObject(this, &ThisClass::OnFilterMethodChanged);
+    
     BackButton->OnClicked().AddUObject(this, &ThisClass::OnBackButtonClicked);
 }
 
@@ -121,8 +121,6 @@ void UInventoryWidget::OnBackButtonClicked()
 {
     // For correct implementation of BackButton logic we need UI framework which maintains multiple HUD states and manages layers for windows and popups
     // However, I'm not going implement this feature in this project. So for now just a primitive hardcoded solution.
-
-
     const EInventorySwitcherTab ActiveTab = static_cast<EInventorySwitcherTab>(InventorySwitcher->GetActiveWidgetIndex());
 
     if (ActiveTab == EInventorySwitcherTab::SlotsView)

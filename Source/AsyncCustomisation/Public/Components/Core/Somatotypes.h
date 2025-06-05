@@ -13,5 +13,5 @@ enum class ESomatotype : uint8
 	TypeThree = 3,
 
 };
-DEFINE_ENUM_TO_STRING(ESomatotype, "SomatotypeEnum")
+//DEFINE_ENUM_TO_STRING(ESomatotype, "SomatotypeEnum")
 ENUM_RANGE_BY_FIRST_AND_LAST(ESomatotype, ESomatotype::None, ESomatotype::TypeThree)

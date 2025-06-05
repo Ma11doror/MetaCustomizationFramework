@@ -4,11 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "BodyPartAsset.h"
 #include "SomatotypeDataAsset.generated.h"
 
 struct FSkinFlagCombination;
-class UBodyPartAsset;
-
 
 UCLASS()
 class ASYNCCUSTOMISATION_API USomatotypeDataAsset : public UPrimaryDataAsset

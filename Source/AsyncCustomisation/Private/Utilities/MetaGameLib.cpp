@@ -27,8 +27,6 @@ UDataTable* UMetaGameLib::GetDataTableFromLibrary(EDataTableLibraryType InType)
 	using namespace GLOBAL_CONSTANTS;
 	//TODO:: log
 	ensure(!DATA_TABLE_LIBRARY.IsNull());
-
-	// Get if loaded
 	const UDataTable* DataTableLibrary = Cast<UDataTable>(DATA_TABLE_LIBRARY.ResolveObject());
 	// Load if not loaded 
 	if (!DataTableLibrary)

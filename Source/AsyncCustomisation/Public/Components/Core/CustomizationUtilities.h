@@ -18,10 +18,12 @@ namespace CustomizationUtilities
 {
 	inline UClass* GetClassForCustomizationAsset(const FName& AssetTypeName)
 	{
-		TMap<FName, UClass*> TypeNameToClass = { {GLOBAL_CONSTANTS::PrimaryCustomizationAssetType, UCustomizationDataAsset::StaticClass() },
+		TMap<FName, UClass*> TypeNameToClass = {
+			{GLOBAL_CONSTANTS::PrimaryCustomizationAssetType, UCustomizationDataAsset::StaticClass() },
 			{GLOBAL_CONSTANTS::PrimaryMaterialCustomizationAssetType, UMaterialCustomizationDataAsset::StaticClass() },
 			{GLOBAL_CONSTANTS::PrimaryBodyPartAssetType, UBodyPartAsset::StaticClass() },
-			{GLOBAL_CONSTANTS::PrimaryMaterialPackCustomizationAssetType, UMaterialPackCustomizationDA::StaticClass() } };
+			{GLOBAL_CONSTANTS::PrimaryMaterialPackCustomizationAssetType, UMaterialPackCustomizationDA::StaticClass() }
+		};
 
 		UClass** Class = TypeNameToClass.Find(AssetTypeName);
 		return Class ? *Class : nullptr;
@@ -30,6 +32,7 @@ namespace CustomizationUtilities
 	inline UClass* GetClassForCustomizationAsset(const FPrimaryAssetId& InAssetId)
 	{
 		const auto& PartAssetTypeName = InAssetId.PrimaryAssetType.GetName();
+		//UE_LOG(LogTemp, Display, TEXT("GetClassForCustomizationAsset:: %s"), *PartAssetTypeName.ToString());
 		auto* Result = GetClassForCustomizationAsset(PartAssetTypeName);
 		return Result;
 	}
@@ -90,5 +93,6 @@ namespace CustomizationUtilities
 	
 	static void SetSkeletalMesh(UCustomizationComponent* Self,
 								USkeletalMesh* SourceSkeletalMesh,
-								USkeletalMeshComponent* TargetSkeletalMeshComponent);
+								USkeletalMeshComponent* TargetSkeletalMeshComponent,
+								const EBodyPartType TargetBodyPartType);
 }

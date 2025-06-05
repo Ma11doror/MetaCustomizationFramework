@@ -10,6 +10,7 @@
 
 #include "CustomizationComponent.generated.h"
 
+class UCustomizationDataAsset;
 struct FBodyPartVariant;
 class UCustomizationAssetManager;
 class USomatotypeDataAsset;
@@ -19,6 +20,21 @@ enum class EItemType : uint8;
 class UBodyPartAsset;
 class UMaterialCustomizationDataAsset;
 class UMaterialPackCustomizationDA;
+	
+struct FAttachedActorChanges
+{
+	TMap<FName, TArray<TWeakObjectPtr<AActor>>> ActorsToDestroy;
+	TArray<FPrimaryAssetId> AssetIdsToLoad;
+	TMap<FPrimaryAssetId, FName> AssetIdToSlugMapForLoad;
+	TMap<FName, ECustomizationSlotType> SlugToSlotMapForLoad;
+};
+struct FResolvedVariantInfo
+{
+    TMap<EBodyPartType, FName> FinalSlotAssignment; 
+    TMap<FName, const FBodyPartVariant*> SlugToResolvedVariantMap; 
+    TArray<FName> InitialSlugsInTargetState;
+};
+
 
 UCLASS()
 class ASYNCCUSTOMISATION_API UCustomizationComponent : public UCharacterComponentBase
@@ -59,8 +75,8 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Customization")
 	FOnEquippedItemsChanged OnEquippedItemsChanged;
 
+	void ApplyCachedMaterialToBodySkinMesh();
 protected:
-	void ClearContext();
 
 	//Invalidation
 	void Invalidate(const FCustomizationContextData& TargetState,
@@ -68,45 +84,97 @@ protected:
 	                ECustomizationInvalidationReason ExplicitReason = ECustomizationInvalidationReason::None);
 
 	//Deffer Invalidation context
-	ECustomizationInvalidationReason DefferReason = ECustomizationInvalidationReason::None;
+	ECustomizationInvalidationReason DeferredReason = ECustomizationInvalidationReason::None;
 
 	// 
 	TOptional<FCustomizationContextData> DeferredTargetState;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInterface> CachedBodySkinMaterialForCurrentSomatotype;
+	
+	void LoadAndCacheBodySkinMaterial(const FPrimaryAssetId& SkinMaterialAssetId, ESomatotype ForSomatotype);
+	void ApplyFallbackMaterialToBodySkinMesh();
 	
 	void OnDefferInvalidationTimerExpired();
 
 	//Allowed only to be called in Invalidate(...) method or other Invalidate*
-	void InvalidateSkin(FCustomizationContextData& TargetState);
+	void InvalidateColoration(FCustomizationContextData& TargetState);
 	void InvalidateBodyParts(FCustomizationContextData& TargetState);
 	void InvalidateAttachedActors(FCustomizationContextData& TargetState);
 
 	void StartInvalidationTimer(const FCustomizationContextData& TargetState); 
 	void CreateTimerIfNeeded();
 
-
-
+	// Helpers
+	FAttachedActorChanges DetermineAttachedActorChanges(const FCustomizationContextData& CurrentState, const FCustomizationContextData& TargetState);
+	void DestroyAttachedActors(const TMap<FName, TArray<TWeakObjectPtr<AActor>>>& ActorsToDestroy);
 	void ResetUnusedBodyParts(const FCustomizationContextData& TargetState, const TSet<EBodyPartType>& FinalUsedPartTypes);
+	void SpawnAndAttachActorsForItem(
+		UCustomizationDataAsset* DataAsset,
+		FName ItemSlug,
+		const TMap<EBodyPartType, USkeletalMeshComponent*>& CharacterSkeletals,
+		ABaseCharacter* CharOwner,
+		UWorld* WorldContext,
+		TArray<TWeakObjectPtr<AActor>>& OutSpawnedActorPtrs,
+		TArray<AActor*>& OutRawSpawnedActorsForEvent);
+
+	TArray<FPrimaryAssetId> CollectRelevantBodyPartAssetIds(
+		const FCustomizationContextData& TargetState,
+		const FCustomizationContextData& AddedItemsContext,
+		const FCustomizationContextData& RemovedItemsContext);
+
+	void RebuildEquippedBodyPartsState(
+		FCustomizationContextData& TargetStateToModify,
+		const FResolvedVariantInfo& ResolvedVariantData,
+		TSet<EBodyPartType>& OutFinalUsedPartTypes,
+		TArray<FName>& OutFinalActiveSlugs);
+
+	FResolvedVariantInfo ResolveBodyPartVariantsAndInitialAssignments(
+		const FCustomizationContextData& FullTargetContext,
+		const TArray<FName>& BodyPartSlugsToResolve,
+		const TMap<FName, UBodyPartAsset*>& SlugToAssetMap);
+
+	void ApplyBodyPartMeshesAndSkin(
+		FCustomizationContextData& TargetStateContext,
+		USomatotypeDataAsset* LoadedSomatotypeDataAsset,
+		TSet<EBodyPartType>& FinalUsedPartTypes,
+		const TArray<FName>& FinalActiveSlugs,
+		const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap);
+	
+	void UpdateMaterialsForBodyPartChanges(
+	FCustomizationContextData& TargetStateToModify, 
+	const FResolvedVariantInfo& ResolvedVariantData);
+
 
 	void ApplyBodySkin(const FCustomizationContextData& TargetState,
 	                   const USomatotypeDataAsset* SomatotypeDataAsset,
 	                   TSet<EBodyPartType>& FinalUsedPartTypes,
 	                   TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap);
+	
+	void ApplyMaterialToBodyMesh(ESomatotype Somatotype,
+								 USkeletalMeshComponent* BodySkinMeshComp);
+	
+	void ProcessBodyParts(FCustomizationContextData& TargetStateToModify,
+	                             USomatotypeDataAsset* LoadedSomatotypeDataAsset,
+	                             TArray<UBodyPartAsset*> LoadedBodyPartAssets);
 
-	void LoadAndProcessBodyParts(FCustomizationContextData& TargetState,
-	                             USomatotypeDataAsset* SomatotypeDataAsset,
-	                             TArray<FPrimaryAssetId>& AllRelevantItemAssetIds);
+	void HandleInvalidationPipelineCompleted();
 
 	TStrongObjectPtr<UTimerComponent> InvalidationTimer = nullptr;
 	
 	UPROPERTY()
 	FCustomizationContextData CurrentCustomizationState;
+	
+	UPROPERTY()
+	FCustomizationContextData ProcessingTargetState;
 
 	UPROPERTY() /* Contains diff for Invalidation and current state*/
 	FCustomizationInvalidationContext InvalidationContext;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Settings")
 	bool OnlyOneItemInSlot = false;
-	
+
+	UPROPERTY()
 	TMap<EBodyPartType, USkeletalMeshComponent*> Skeletals;
 	
 	virtual void BeginPlay() override;

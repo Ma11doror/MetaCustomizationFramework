@@ -30,9 +30,9 @@ ABaseCharacter::ABaseCharacter()
 	ensure(BeardMesh);
 	BeardMesh->SetupAttachment(GetMesh());
 
-	GoatMesh = CreateOptionalDefaultSubobject<USkeletalMeshComponent>("GoatMesh");
-	ensure(GoatMesh);
-	GoatMesh->SetupAttachment(GetMesh());
+	TorsoMesh = CreateOptionalDefaultSubobject<USkeletalMeshComponent>("GoatMesh");
+	ensure(TorsoMesh);
+	TorsoMesh->SetupAttachment(GetMesh());
 
 	NeckMesh = CreateOptionalDefaultSubobject<USkeletalMeshComponent>("NeckMesh");
 	ensure(NeckMesh);
@@ -79,7 +79,7 @@ void ABaseCharacter::SetupMasterPose()
 	LegsMesh->SetLeaderPoseComponent(GetMesh(), true);
 	BackAccessoryFirstMesh->SetLeaderPoseComponent(GetMesh(), true);
 	BackAccessorySecondaryMesh->SetLeaderPoseComponent(GetMesh(), true);
-	GoatMesh->SetLeaderPoseComponent(GetMesh(), true);
+	TorsoMesh->SetLeaderPoseComponent(GetMesh(), true);
 }
 
 void ABaseCharacter::Tick(float DeltaTime)
