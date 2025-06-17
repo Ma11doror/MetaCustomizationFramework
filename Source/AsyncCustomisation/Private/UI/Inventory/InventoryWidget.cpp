@@ -4,9 +4,11 @@
 #include "Components/VerticalBox.h"
 #include "CommonUI/Public/CommonAnimatedSwitcher.h"
 #include "CommonUI/Public/CommonListView.h"
+#include "CommonUI/Public/CommonTileView.h"
 #include "Components/Overlay.h"
 #include "Meta/PlayerControllerBase.h"
 #include "UI/VM_Inventory.h"
+#include "UI/Inventory/Components/InventoryItemEntryWidget.h"
 #include "UI/Inventory/Data/InventoryListItemData.h"
 
 
@@ -37,12 +39,24 @@ void UInventoryWidget::NativeOnActivated()
     {
         ConstructButtons();
     }
+    
+    ensureAlways(InventorySlotsButtonGroup);
     InventorySlotsButtonGroup->OnButtonBaseClicked.AddUniqueDynamic(this, &ThisClass::OnItemSlotClicked);
+    
+    ensureAlways(ItemsList);
     ItemsList->OnItemClicked().AddUObject(this, &ThisClass::OnListItemClicked);
+    ItemsList->OnEntryWidgetGenerated().AddUObject(this, &ThisClass::OnMainListItemObjectSet);
+    //ItemsList->OnItemIsHoveredChanged().AddUObject(this, &ThisClass::OnItemIsHoveredChanged);
     
-    //InventoryViewModel->OnFilterMethodChanged.AddUObject(this, &ThisClass::OnFilterMethodChanged);
+    ensureAlways(InventorySlotsButtonGroup);
+    OnRequestColorPalette.BindUObject(this, &ThisClass::UInventoryWidget::HandleRequestColorPalette);
     
+    ensureAlways(SkinPaletteListView);
+    SkinPaletteListView->OnItemClicked().AddUObject(this, &ThisClass::OnPaletteItemClicked);
+    
+    ensureAlways(BackButton);
     BackButton->OnClicked().AddUObject(this, &ThisClass::OnBackButtonClicked);
+
 }
 
 void UInventoryWidget::NativeOnDeactivated()
@@ -140,7 +154,7 @@ void UInventoryWidget::OnBackButtonClicked()
          * all items are initially hidden when a new items tab is subsequently opened,
          * preventing the "ghosting" of previous tab's items before the new filter is applied.
          */
-        InventoryViewModel->FilterBySlot(EItemType::None);
+        InventoryViewModel->FilterBySlot(EItemSlot::None);
     }
     /*switch (static_cast<EInventorySwitcherTab>(InventorySwitcher->GetActiveWidgetIndex()))
     {
@@ -169,6 +183,30 @@ void UInventoryWidget::OnListTabOpened()
     EmptyListPlaceholder->SetVisibility(Found
                                             ? ESlateVisibility::Collapsed
                                             : ESlateVisibility::Visible);
+}
+
+void UInventoryWidget::HandleRequestColorPalette(FName ItemSlug)
+{
+    InventoryViewModel->RequestColorPaletteForItem(ItemSlug);
+}
+
+void UInventoryWidget::OnMainListItemObjectSet(UUserWidget& InEntryWidget)
+{
+    //UUserWidget* EntryWidget = ItemsList->GetEntryWidgetFromItem(ListItemObject);
+
+    if (IPaletteRequester* ItemEntry = Cast<IPaletteRequester>(&InEntryWidget))
+    {
+        ItemEntry->SetPaletteRequestHandler(OnRequestColorPalette);
+    }
+}
+
+void UInventoryWidget::OnPaletteItemClicked(UObject* Item)
+{
+    ensureAlways(Item);
+    
+    auto InventoryListItemObject = Cast<USkinListItemData>(Item);
+    ensureAlways(InventoryListItemObject);
+    InventoryViewModel->OnEntryItemClicked(InventoryListItemObject->ItemSlug);
 }
 
 void UInventoryWidget::SetActiveInventoryTab(EInventorySwitcherTab Tab)

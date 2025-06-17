@@ -34,36 +34,36 @@ namespace CustomizationSlots
 {
 	namespace Detail
 	{
-		inline static const Util::TFixedMap<EItemType, ECustomizationSlotType, 32> CustomizationSlotsMapping
+		inline static const Util::TFixedMap<EItemSlot, ECustomizationSlotType, 32> CustomizationSlotsMapping
 		{
 			// mains
-			{EItemType::Body, ECustomizationSlotType::Body},
-			{EItemType::Head, ECustomizationSlotType::Head},
-			{EItemType::Hat, ECustomizationSlotType::Hat},
-			{EItemType::Feet, ECustomizationSlotType::Feet},
-			{EItemType::Hands, ECustomizationSlotType::Hands},
-			{EItemType::Wrists, ECustomizationSlotType::Wrists}, 
-			{EItemType::Legs, ECustomizationSlotType::Legs},
+			{EItemSlot::Body, ECustomizationSlotType::Body},
+			{EItemSlot::Head, ECustomizationSlotType::Head},
+			{EItemSlot::Hat, ECustomizationSlotType::Hat},
+			{EItemSlot::Feet, ECustomizationSlotType::Feet},
+			{EItemSlot::Hands, ECustomizationSlotType::Hands},
+			{EItemSlot::Wrists, ECustomizationSlotType::Wrists}, 
+			{EItemSlot::Legs, ECustomizationSlotType::Legs},
 
 			// extern items
-			{EItemType::Beard, ECustomizationSlotType::Beard}, 
-			{EItemType::Haircut, ECustomizationSlotType::Haircut},
-			{EItemType::Skin, ECustomizationSlotType::Skin},
+			{EItemSlot::Beard, ECustomizationSlotType::Beard}, 
+			{EItemSlot::Haircut, ECustomizationSlotType::Haircut},
+			{EItemSlot::Skin, ECustomizationSlotType::Skin},
 
 			// Accessory
-			{EItemType::Ring, ECustomizationSlotType::Ring},
-			{EItemType::Chain, ECustomizationSlotType::Pendant}, 
-			{EItemType::Bandan, ECustomizationSlotType::FaceAccessory}, //  Pendant?
-			{EItemType::FaceAccessory, ECustomizationSlotType::FaceAccessory}, 
+			{EItemSlot::Ring, ECustomizationSlotType::Ring},
+			{EItemSlot::Chain, ECustomizationSlotType::Pendant}, 
+			{EItemSlot::Bandan, ECustomizationSlotType::FaceAccessory}, //  Pendant?
+			{EItemSlot::FaceAccessory, ECustomizationSlotType::FaceAccessory}, 
 
-			{EItemType::Backpack, ECustomizationSlotType::Back},
-			{EItemType::Cloak, ECustomizationSlotType::Back},
+			{EItemSlot::Backpack, ECustomizationSlotType::Back},
+			{EItemSlot::Cloak, ECustomizationSlotType::Back},
 		};
 	}
 
-	inline ECustomizationSlotType GetSlotTypeForItem(EItemType ItemType)
+	inline ECustomizationSlotType GetSlotForItem(EItemSlot ItemSlot)
 	{
-		const ECustomizationSlotType* Found = Detail::CustomizationSlotsMapping.Find(ItemType);
+		const ECustomizationSlotType* Found = Detail::CustomizationSlotsMapping.Find(ItemSlot);
 		return Found ? *Found : ECustomizationSlotType::Unknown;
 	}
 
@@ -110,17 +110,17 @@ namespace CustomizationSlots
 			return ECustomizationSlotType::Unknown;
 		}
 		
-		const FName ItemTypeTagName = GET_MEMBER_NAME_CHECKED(UItemMetaAsset, ItemType);
-		EItemType ItemTypeValue = GetEnumValueFromAssetData<EItemType>(
+		const FName ItemSlotTagName = GET_MEMBER_NAME_CHECKED(UItemMetaAsset, ItemSlot);
+		EItemSlot ItemSlotValue = GetEnumValueFromAssetData<EItemSlot>(
 			AssetData,
-			ItemTypeTagName,
-			EItemType::None 
+			ItemSlotTagName,
+			EItemSlot::None 
 		);
 		
-		return GetSlotTypeForItem(ItemTypeValue);
+		return GetSlotForItem(ItemSlotValue);
 	}
-	inline EItemType GetItemTypeForSlug(FName ItemSlug)
+	inline EItemSlot GetItemSlotForSlug(FName ItemSlug)
 	{
-		return  EItemType::None;
+		return  EItemSlot::None;
 	};
 } // namespace CustomizationSlots

@@ -13,15 +13,57 @@ namespace CommonUtilities
 {
 	inline FPrimaryAssetId ItemSlugToCustomizationAssetId(const FName& InSlug)
 	{
-		FPrimaryAssetId ItemCustomizationAssetId = NONE_ASSET_ID;
-		const UItemMetaAsset* ItemMetaAsset = UCustomizationAssetManager::LoadItemMetaAssetSync(InSlug);
-		
-		if (ItemMetaAsset && ItemMetaAsset->CustomizationAssetId != NONE_ASSET_ID)
+		UAssetManager& AssetManager = UAssetManager::Get();
+		UObject* FoundObject = nullptr;
+
+		// 1. Find or load asset if it is base item type
+		FPrimaryAssetId BaseItemAssetId(GLOBAL_CONSTANTS::PrimaryItemAssetType, InSlug);
+		if (BaseItemAssetId.IsValid())
 		{
-			ItemCustomizationAssetId = ItemMetaAsset->CustomizationAssetId;
+			FoundObject = AssetManager.GetPrimaryAssetObject(BaseItemAssetId);
+			if (!FoundObject)
+			{
+				// Loading sync for now
+				FSoftObjectPath AssetPath = AssetManager.GetPrimaryAssetPath(BaseItemAssetId);
+				if (AssetPath.IsValid())
+				{
+					FoundObject = AssetPath.TryLoad();
+				}
+			}
 		}
 
-		return ItemCustomizationAssetId;
+		// 2. If no result - try to find as shader item asset
+		if (!FoundObject)
+		{
+			FPrimaryAssetId SkinAssetId(GLOBAL_CONSTANTS::PrimaryItemShaderAssetType, InSlug);
+			if (SkinAssetId.IsValid())
+			{
+				FoundObject = AssetManager.GetPrimaryAssetObject(SkinAssetId);
+				if (!FoundObject)
+				{
+					FSoftObjectPath AssetPath = AssetManager.GetPrimaryAssetPath(SkinAssetId);
+					if (AssetPath.IsValid())
+					{
+						FoundObject = AssetPath.TryLoad();
+					}
+				}
+			}
+		}
+
+		// 3. 
+		if (FoundObject)
+		{
+			if (const UItemMetaAsset* ItemMetaAsset = Cast<UItemMetaAsset>(FoundObject))
+			{
+				if (ItemMetaAsset->CustomizationAssetId.IsValid())
+				{
+					return ItemMetaAsset->CustomizationAssetId;
+				}
+			}
+		}
+
+		// 4. null
+		return FPrimaryAssetId();
 	}
 	
 	inline FPrimaryAssetId ItemSlugToAssetId(const FName& InSlug)

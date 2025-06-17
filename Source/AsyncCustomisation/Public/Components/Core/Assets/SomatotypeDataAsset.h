@@ -9,7 +9,7 @@
 
 struct FSkinFlagCombination;
 
-UCLASS()
+UCLASS(Blueprintable)
 class ASYNCCUSTOMISATION_API USomatotypeDataAsset : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
@@ -21,6 +21,7 @@ public:
 	
 	FPrimaryAssetId GetPrimaryAssetId() const override
 	{
-		return FPrimaryAssetId("SomatotypeDataAsset", GetFName());
+		return FPrimaryAssetId(GLOBAL_CONSTANTS::PrimarySomatotypeAssetType, GetFName());
+		//return FPrimaryAssetId(FPrimaryAssetType("SomatotypeDataAsset"), GetFName());
 	}
 };

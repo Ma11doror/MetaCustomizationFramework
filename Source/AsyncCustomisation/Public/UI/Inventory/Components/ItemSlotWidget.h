@@ -6,7 +6,7 @@
 #include "ItemSlotWidget.generated.h"
 
 struct FInventoryEquippedItemData;
-enum class EItemType : uint8;
+enum class EItemSlot : uint8;
 enum class EItemTier : uint8;
 
 UCLASS()
@@ -22,7 +22,7 @@ public:
     UFUNCTION(BlueprintCallable)
     void SetSlotData(const FInventoryEquippedItemData& InData);
 
-    EItemType GetSlotType() const
+    EItemSlot GetSlotType() const
     {
         return ItemType;
     }
@@ -62,7 +62,7 @@ protected:
     void SetDefaults();
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
-    EItemType ItemType = EItemType::None;
+    EItemSlot ItemType = EItemSlot::None;
     
 };
 

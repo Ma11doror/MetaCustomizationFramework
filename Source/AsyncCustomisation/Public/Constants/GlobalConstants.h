@@ -11,8 +11,10 @@ namespace GLOBAL_CONSTANTS
 	inline const FPrimaryAssetId NONE_ASSET_ID = FPrimaryAssetId();
 	
 	inline const FName PrimaryItemAssetType = FName(TEXT("ItemMetaAsset"));
+	inline const FName PrimaryItemShaderAssetType = FName(TEXT("ItemShaderMetaAsset"));
+	inline const FName PrimarySomatotypeAssetType = FName(TEXT("SomatotypeDataAsset"));
 
-	inline const FName PrimaryCustomizationAssetType = FName(TEXT("CustomizationDataAsset"));
+	inline const FName PrimaryCustomizationAssetType = FName(TEXT("CustomizationDataAsset")); // TODO:: rename!!!
 	inline const FName PrimaryMaterialCustomizationAssetType = FName(TEXT("MaterialCustomizationDataAsset"));
 	inline const FName PrimaryMaterialPackCustomizationAssetType = FName(TEXT("MaterialPackCustomizationDA"));
 	inline const FName PrimaryBodyPartAssetType = FName(TEXT("BodyPartAsset"));

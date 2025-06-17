@@ -7,6 +7,7 @@
 #include "Components/Core/CustomizationTypes.h"
 #include "VM_Inventory.generated.h"
 
+class USkinListItemData;
 class UInventoryListItemData;
 struct FInventoryEquippedItemData;
 struct FStreamableHandle;
@@ -32,10 +33,13 @@ struct FInventoryEquippedItemData
 
     UPROPERTY(BlueprintReadOnly, Category="Equipped Item")
     EItemTier Tier = EItemTier::Common;
-
+    
+    UPROPERTY(BlueprintReadOnly, Category="Equipped Item")
+    FName AppliedSkinSlug;
+    
     bool operator==(const FInventoryEquippedItemData& Other) const
     {
-        return ItemSlug.IsEqual(Other.ItemSlug); // &&
+        return ItemSlug.IsEqual(Other.ItemSlug) && AppliedSkinSlug.IsEqual(Other.AppliedSkinSlug); // &&
             //ItemName.IsEqual(Other.ItemName) &&
             //Tier == Other.Tier;
         // Specify how to compare items here. Maybe items can upgrade tier?
@@ -57,7 +61,7 @@ struct FPendingMetaRequest
     }
 };
 
-inline bool operator==(const TMap<EItemType, FInventoryEquippedItemData>& Lhs, const TMap<EItemType, FInventoryEquippedItemData>& Rhs)
+inline bool operator==(const TMap<EItemSlot, FInventoryEquippedItemData>& Lhs, const TMap<EItemSlot, FInventoryEquippedItemData>& Rhs)
 {
     if (Lhs.Num() != Rhs.Num()) return false;
     for (const auto& Pair : Lhs)
@@ -97,6 +101,9 @@ public:
     
     friend class APlayerControllerBase;
     friend class UInventoryWidget;
+
+    UFUNCTION(BlueprintPure, FieldNotify, Category = "ViewModel|Inventory")
+    TArray<USkinListItemData*> GetSkinsForColorPalette() const;
     
     UFUNCTION()
     void SetbIsLoading(const bool bIsLoaded);
@@ -107,12 +114,12 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify, Category = "Inventory|UI Helper")
     TArray<UObject*> GetInventoryItemsAsObjects() const;
     
-    void FilterBySlot(EItemType DesiredSlotType);
+    void FilterBySlot(EItemSlot DesiredSlot);
     
-    DECLARE_MULTICAST_DELEGATE_OneParam(FOnFilterMethodChanged, EItemType /* InItemType */ );
+    DECLARE_MULTICAST_DELEGATE_OneParam(FOnFilterMethodChanged, EItemSlot /* InItemType */ );
     FOnFilterMethodChanged OnFilterMethodChanged;
 
-    EItemType GetFilterType() const;
+    EItemSlot GetFilterType() const;
     
 protected:
     UFUNCTION(BlueprintCallable, Category = "ViewModel")
@@ -122,19 +129,22 @@ protected:
     TArray<TObjectPtr<UInventoryListItemData>> InventoryItemsList;
 
     UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|Inventory")
-    TMap<EItemType, FInventoryEquippedItemData> EquippedItemsMap;
+    TMap<EItemSlot, FInventoryEquippedItemData> EquippedItemsMap;
 
     UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|State")
     bool bIsLoading = false;
 
-    UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
-    bool RequestEquipItem(FName ItemSlugToEquip);
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|State")
+    bool IsColorPaletteLoading  = false;
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
-    bool RequestUnequipItem(FName ItemSlugToUnequip);
+    bool RequestEquipItem(const FName& ItemSlugToEquip);
+
+    UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
+    bool RequestUnequipItem(const FName& ItemSlugToUnequip);
     
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
-    void OnEntryItemClicked(FName ItemSlugToUnequip);
+    void OnEntryItemClicked(const FName& InItemSlug);
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
     void RequestUnequipSlot(ECustomizationSlotType SlotToUnequip);
@@ -143,7 +153,7 @@ protected:
     void RequestDropItem(FPrimaryAssetId ItemIdToDrop, int32 CountToDrop = 1);
 
     void SetInventoryItemsList(const TArray<TObjectPtr<UInventoryListItemData>>& InNewList);
-    void SetEquippedItemsMap(const TMap<EItemType, FInventoryEquippedItemData>& NewMap);
+    void SetEquippedItemsMap(const TMap<EItemSlot, FInventoryEquippedItemData>& NewMap);
     void SetItemsCount(const int32 NewCount);
     void SetIsLoading(bool bNewLoadingState);
 
@@ -161,7 +171,7 @@ protected:
     void OnMetaDataRequestCompleted(int32 RequestIndex);
     void CancelAllMetaRequests();
     
-    bool IsItemSlugEquipped(FName ItemSlug);    
+    bool IsItemSlugEquipped(const FName& ItemSlug);    
 
     UFUNCTION()
     void HandleEquippedItemsUpdate(const FCustomizationContextData& NewState);
@@ -170,13 +180,28 @@ protected:
     void LoadRequiredMetaData(const TArray<FPrimaryAssetId>& MetaAssetIdsToLoad);
     void OnMetaDataLoaded();
     void PopulateViewModelProperties();
-    void BroadcastGetterForType(EItemType ItemType);
+    void BroadcastGetterForType(EItemSlot ItemSlot);
 
   
     UPROPERTY(Transient)
     TMap<FPrimaryAssetId, TObjectPtr<UItemMetaAsset>> LoadedMetaCache;
 
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|Inventory")
+    TArray<USkinListItemData*> SkinsForColorPalette;
 
+    void SetSkinsForColorPalette(const TArray<USkinListItemData*>& NewSkins);
+    void OnSkinMetaDataForPaletteLoaded(TArray<TObjectPtr<USkinListItemData>> LoadedSkinListData);
+    void SetIsColorPaletteLoading(bool InLoadingState);
+    bool GetIsColorPaletteLoading() const;
+    void RequestColorPaletteForItem(FName MainItemSlug);
+    void FetchAndPopulateSkinsForPalette(UItemShaderMetaAsset* MainItemMeta);
+    void ClearColorPalette();
+    bool ApplySkinToCurrentItem(FName SkinSlugToApply);
+    void SetItemSlugForColorPalette(FName NewSlug);
+
+    UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|State")
+    FName ItemSlugForColorPalette;
+    
     TSharedPtr<FStreamableHandle> CurrentMetaLoadHandle;
     TArray<FPrimaryAssetId> PendingMetaLoadIds; 
 
@@ -203,7 +228,7 @@ private:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, FieldNotify, Setter, Category = "ViewModel|Inventory", meta = (AllowPrivateAccess))
     int32 ItemsCount;
 
-    EItemType LastFilterType = EItemType::None;
+    EItemSlot LastFilterType = EItemSlot::None;
     
     void BroadcastEquippedItemChanges();
 
@@ -225,11 +250,4 @@ private:
     
     UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
     FInventoryEquippedItemData GetWristsItem() const;
-        
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetEquippedSkinItem() const;
-
-    UPROPERTY(BlueprintGetter=GetFeetItem, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData FeetItem;
-    
 };

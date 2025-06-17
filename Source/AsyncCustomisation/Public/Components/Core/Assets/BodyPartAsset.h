@@ -20,7 +20,10 @@ struct FBodyPartVariant
 	// Body part
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	USkeletalMesh* BodyPartSkeletalMesh = nullptr;
-
+	
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TArray<TObjectPtr<UMaterialInterface>> DefaultMaterials;
+	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	EBodyPartType BodyPartType = EBodyPartType::None;
 

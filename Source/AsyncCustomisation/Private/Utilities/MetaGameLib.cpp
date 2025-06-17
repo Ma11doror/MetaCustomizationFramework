@@ -47,38 +47,38 @@ UDataTable* UMetaGameLib::GetDataTableFromLibrary(EDataTableLibraryType InType)
 	return Result;
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapToSlot(const TMap<EItemType, FInventoryEquippedItemData>& InMap, const EItemType& InType)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapToSlot(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap, const EItemSlot& InType)
 {
 	auto Item = InMap.Find(InType);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHatSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHatSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemType::Hat);
+	auto Item = InMap.Find(EItemSlot::Hat);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBodySlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBodySlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemType::Body);
+	auto Item = InMap.Find(EItemSlot::Body);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapGlovesSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapGlovesSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemType::Wrists);
+	auto Item = InMap.Find(EItemSlot::Wrists);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedPantsPantsSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedPantsPantsSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemType::Legs);
+	auto Item = InMap.Find(EItemSlot::Legs);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapFeetSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapFeetSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemType::Feet);
+	auto Item = InMap.Find(EItemSlot::Feet);
 	return Item ? *Item : FInventoryEquippedItemData();
 }

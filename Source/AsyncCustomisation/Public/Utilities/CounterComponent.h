@@ -25,7 +25,7 @@ inline void FCounterComponent::Push()
 		return;
 	}
 	++Counter;
-	UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: PUSHED. New Counter: %llu"), Counter);
+	//UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: PUSHED. New Counter: %llu"), Counter);
 }
 
 inline void FCounterComponent::Pop()
@@ -33,15 +33,15 @@ inline void FCounterComponent::Pop()
 	if (Counter > 0)
 	{
 		Counter--;
-		UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: POPPED. New Counter: %d."), Counter);
+		//UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: POPPED. New Counter: %d."), Counter);
 		if (Counter == 0) 
 		{
-			UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: Counter is ZERO. Broadcasting OnTriggered."));
+			//UE_LOG(LogTemp, Warning, TEXT("FCounterComponent: Counter is ZERO. Broadcasting OnTriggered."));
 			OnTriggered.Broadcast();
 		}
 	}
 	else
 	{
-		UE_LOG(LogTemp, Error, TEXT("FCounterComponent: POPPED when counter was already zero or less!"));
+		//UE_LOG(LogTemp, Error, TEXT("FCounterComponent: POPPED when counter was already zero or less!"));
 	}
 }

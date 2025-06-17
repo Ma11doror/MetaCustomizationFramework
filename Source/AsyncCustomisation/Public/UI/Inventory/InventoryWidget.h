@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "UI/ActivatableWidget.h"
 #include "CommonUI/Public/Groups/CommonButtonGroupBase.h"
+#include "Data/PaletteRequester.h"
 
 
 #include "InventoryWidget.generated.h"
@@ -15,7 +16,7 @@ class UCustomizationComponent;
 class UVerticalBox;
 class UHorizontalBox;
 class UOverlay;
-enum class EItemType : uint8;
+enum class EItemSlot : uint8;
 class UWidgetSwitcher;
 class UVM_Inventory;
 class UUniformGridPanel;
@@ -25,6 +26,7 @@ class UButton;
 class UItemSlotWidget;
 class UCommonAnimatedSwitcher;
 class UCommonListView;
+class UCommonTileView;
 
 UENUM(BlueprintType)
 enum class EInventorySwitcherTab : uint8
@@ -53,6 +55,9 @@ public:
 
     void SetActiveInventoryTab(EInventorySwitcherTab Tab);
 
+   // UPROPERTY(BlueprintReadWrite, Category="Inventory|Actions")
+    FOnRequestColorPalette OnRequestColorPalette;
+
 protected:
     UFUNCTION()
     void OnItemSlotClicked(UCommonButtonBase* AssociatedButton, int32 ButtonIndex);
@@ -68,6 +73,13 @@ protected:
     void PlayFailEquipAnimation();
     
     void OnListTabOpened();
+    
+    UFUNCTION()
+    void HandleRequestColorPalette(FName ItemSlug);
+    void OnMainListItemObjectSet(UUserWidget& InEntryWidget);
+ //   void OnItemIsHoveredChanged(UObject* InEntryWidget, bool InIsHovered);
+
+    void OnPaletteItemClicked(UObject* Item);
 
     UPROPERTY()
     APlayerControllerBase* PlayerController;
@@ -118,4 +130,10 @@ protected:
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (BindWidget))
     TObjectPtr<UOverlay> EmptyListPlaceholder = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Palette", meta = (BindWidget))
+    TObjectPtr<UCommonTileView> SkinPaletteListView = nullptr;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory|Palette", meta = (BindWidget))
+    TObjectPtr<UWidget> SkinPaletteLoadingIndicator = nullptr;
 };

@@ -26,5 +26,8 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	TSoftObjectPtr<UMaterialInterface> CustomMaterial = nullptr;
 
-	virtual FPrimaryAssetId GetPrimaryAssetId() const override;
+	virtual FPrimaryAssetId GetPrimaryAssetId() const override
+	{
+		return FPrimaryAssetId(GLOBAL_CONSTANTS::PrimaryMaterialPackCustomizationAssetType, GetFName());
+	}
 };

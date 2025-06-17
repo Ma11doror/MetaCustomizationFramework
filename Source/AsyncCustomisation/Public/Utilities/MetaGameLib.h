@@ -25,20 +25,20 @@ public:
 	static UDataTable* GetDataTableFromLibrary(EDataTableLibraryType InType);
 
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedMapToSlot(const TMap<EItemType, FInventoryEquippedItemData>& InMap, const EItemType& InType);
+	static FInventoryEquippedItemData ConvertEquippedMapToSlot(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap, const EItemSlot& InType);
 	
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedMapHatSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap);
+	static FInventoryEquippedItemData ConvertEquippedMapHatSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap);
 
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedMapBodySlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap);
+	static FInventoryEquippedItemData ConvertEquippedMapBodySlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap);
 	
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedMapGlovesSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap);
+	static FInventoryEquippedItemData ConvertEquippedMapGlovesSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap);
 
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedPantsPantsSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap);
+	static FInventoryEquippedItemData ConvertEquippedPantsPantsSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap);
 	
 	UFUNCTION(BlueprintPure, Category = "InventoryConversion")
-	static FInventoryEquippedItemData ConvertEquippedMapFeetSlotItem(const TMap<EItemType, FInventoryEquippedItemData>& InMap);
+	static FInventoryEquippedItemData ConvertEquippedMapFeetSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap);
 };

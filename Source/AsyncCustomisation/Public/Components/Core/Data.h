@@ -18,7 +18,7 @@ enum class EItemTier : uint8
 ENUM_RANGE_BY_FIRST_AND_LAST(EItemTier, EItemTier::None, EItemTier::Royal)
 
 UENUM(BlueprintType)
-enum class EItemType : uint8
+enum class EItemSlot : uint8
 {
 	None = 0,
 
@@ -40,7 +40,17 @@ enum class EItemType : uint8
 	Cloak,
 };
 
-ENUM_RANGE_BY_FIRST_AND_LAST(EItemType, EItemType::Body, EItemType::Chain)
+ENUM_RANGE_BY_FIRST_AND_LAST(EItemSlot, EItemSlot::Body, EItemSlot::Chain)
+
+UENUM(BlueprintType)
+enum class EItemType : uint8
+{
+	None = 0,
+	Clothing,
+	Accessory,
+	BodyPart,
+	Skin,
+};
 
 // actually now it's skin coverage flag, but renaming generate strange bugs
 UENUM(BlueprintType)

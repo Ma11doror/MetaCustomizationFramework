@@ -3,14 +3,20 @@
 #include "UI/Inventory/Data/InventoryListItemData.h"
 
 
+void UInventoryItemEntryWidget::SetPaletteRequestHandler(const FOnRequestColorPalette& InDelegate)
+{
+	IPaletteRequester::SetPaletteRequestHandler(InDelegate);
+	PaletteRequestHandler = InDelegate;
+}
+
 void UInventoryItemEntryWidget::NativeOnListItemObjectSet(UObject* ListItemObject)
 {
 	IUserObjectListEntry::NativeOnListItemObjectSet(ListItemObject);
 	
 	UE_LOG(LogTemp, Display, TEXT("InventoryItemEntryWidget::NativeOnListItemObjectSet:: %s"), *ListItemObject->GetName());
 	
-	UInventoryListItemData* ItemData = Cast<UInventoryListItemData>(ListItemObject);
-	if (!ItemData)
+	InventoryListItemData = Cast<UInventoryListItemData>(ListItemObject);;
+	if (!InventoryListItemData)
 	{
 		SetVisibility(ESlateVisibility::Collapsed);
 		return;
@@ -18,17 +24,19 @@ void UInventoryItemEntryWidget::NativeOnListItemObjectSet(UObject* ListItemObjec
 	
 	if(FilterDelegateHandle.IsValid())
 	{
-		ItemData->UnsubscribeFromFilterChanges(FilterDelegateHandle);
+		InventoryListItemData->UnsubscribeFromFilterChanges(FilterDelegateHandle);
 		FilterDelegateHandle.Reset();
 	}
-	FilterDelegateHandle = ItemData->SubscribeToFilterChanges(this, 
-		[this](EItemType NewFilterType) 
+	FilterDelegateHandle = InventoryListItemData->SubscribeToFilterChanges(this, 
+		[this](EItemSlot NewFilterType) 
 		{
 			HandleFilterChanged(NewFilterType);
 		}
 	);
 	
-	ItemData->OnIsEquippedChanged.BindUObject(this, &ThisClass::SetIsEquippedVisualState);
+	UpdateUI(InventoryListItemData);
+	
+	InventoryListItemData->OnIsEquippedChanged.BindUObject(this, &ThisClass::SetIsEquippedVisualState);
 }
 
 void UInventoryItemEntryWidget::NativeConstruct()
@@ -39,7 +47,7 @@ void UInventoryItemEntryWidget::NativeConstruct()
 
 void UInventoryItemEntryWidget::NativeDestruct()
 {
-	
+	PaletteButton->OnClicked().RemoveAll(this);
 	Super::NativeDestruct();
 }
 
@@ -54,4 +62,18 @@ void UInventoryItemEntryWidget::NativeOnEntryReleased()
 	}
 	FilterDelegateHandle.Reset();
 	ItemData->OnIsEquippedChanged.Unbind();
+}
+
+void UInventoryItemEntryWidget::NativeOnInitialized()
+{
+	Super::NativeOnInitialized();
+	if (PaletteButton)
+	{
+		PaletteButton->OnClicked().AddUObject(this, &ThisClass::OnCustomizeButtonClicked);
+	}
+}
+
+void UInventoryItemEntryWidget::OnCustomizeButtonClicked() const
+{
+	PaletteRequestHandler.ExecuteIfBound(InventoryListItemData->ItemSlug);
 }

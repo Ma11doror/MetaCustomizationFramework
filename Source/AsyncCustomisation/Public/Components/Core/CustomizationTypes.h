@@ -204,7 +204,7 @@ public:
 			   EquippedMaterialsMap == Other.EquippedMaterialsMap &&
 			   EquippedBodyPartsItems == Other.EquippedBodyPartsItems &&
 			   EquippedCustomizationItemActors == Other.EquippedCustomizationItemActors &&
-			   SkinVisibilityFlags == Other.SkinVisibilityFlags && // Assumes FSkinFlagCombination has operator==
+			   SkinVisibilityFlags == Other.SkinVisibilityFlags &&
 			   VFXCustomization == Other.VFXCustomization;
 	}
 

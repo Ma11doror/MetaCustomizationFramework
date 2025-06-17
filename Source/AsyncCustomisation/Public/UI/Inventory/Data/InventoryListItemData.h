@@ -7,19 +7,17 @@
 #include "InventoryListItemData.generated.h" 
 
 class UItemMetaAsset;
-enum class EItemType : uint8;
+enum class EItemSlot : uint8;
 enum class EItemTier : uint8;
 
 DECLARE_DELEGATE_OneParam(FOnIsEquippedChanged, bool /*InIsEquipped*/);
 
-UCLASS(BlueprintType, DefaultToInstanced)
-class ASYNCCUSTOMISATION_API UInventoryListItemData : public UObject
+UCLASS(BlueprintType, Abstract, DefaultToInstanced)
+class ASYNCCUSTOMISATION_API UBaseListItemData : public UObject
 {
 	GENERATED_BODY()
-	
 
 public:
-
 	UFUNCTION(BlueprintPure, Category = "Inventory Item")
 	bool GetIsEquipped() const { return bIsEquipped; }
 	
@@ -29,25 +27,12 @@ public:
 		OnIsEquippedChanged.ExecuteIfBound(bIsEquipped);
 	}
 	
-	
-	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(EItemType)> /*WidgetHandler*/)>;
-	using UnsubscribeFuncType = TFunction<void(FDelegateHandle)>;
-
-	void SetEventSubscriptionFunctions(SubscribeFuncType InSubscribeFunc, UnsubscribeFuncType InUnsubscribeFunc)
-	{
-		SubscribeFunction = MoveTemp(InSubscribeFunc);
-		UnsubscribeFunction = MoveTemp(InUnsubscribeFunc);
-	}
-	
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	FPrimaryAssetId ItemId; 
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	FName ItemSlug;         
-
-	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
-	int32 Count;
-
+	
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	TSoftObjectPtr<UTexture2D> Icon;
 
@@ -61,10 +46,12 @@ public:
 	EItemTier Tier = EItemTier::Common;
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
-	EItemType ItemType = EItemType::None; 
+	EItemSlot ItemSlot = EItemSlot::None; 
 
+	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
+	EItemType ItemType = EItemType::None;
 	
-	void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped)
+	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped)
 	{
 		if (!MetaAsset) return;
 
@@ -74,12 +61,64 @@ public:
 		Description = MetaAsset->Description;
 		Icon = MetaAsset->Icon;
 		Tier = MetaAsset->ItemTier;
+		ItemSlot = MetaAsset->ItemSlot;
 		ItemType = MetaAsset->ItemType;
-		Count = InitialCount;
+		
 		bIsEquipped = bIsCurrentlyEquipped;
 	}
 
-	FDelegateHandle SubscribeToFilterChanges(UObject* SubscriberWidget, TFunction<void(EItemType)> WidgetHandler)
+	bool operator==(const UBaseListItemData& Other) const
+	{
+        
+		return ItemId == Other.ItemId &&
+			   ItemSlug == Other.ItemSlug &&
+			   	Tier == Other.Tier &&  
+		//	   Count == Other.Count &&
+			   bIsEquipped == Other.bIsEquipped;
+		// return ItemId == Other.ItemId && Count == Other.Count && bIsEquipped == Other.bIsEquipped;
+
+		/*
+		 *
+		 *  Name.ToString() == Other.Name.ToString() &&
+		 * 
+		 *  ItemType == Other.ItemType &&
+		 *  SlotType == Other.SlotType && 
+		 */
+	}
+	
+	FOnIsEquippedChanged OnIsEquippedChanged;
+	
+private:
+	
+	bool bIsEquipped = false;
+};
+
+
+UCLASS(BlueprintType, DefaultToInstanced)
+class ASYNCCUSTOMISATION_API UInventoryListItemData : public UBaseListItemData
+{
+	GENERATED_BODY()
+public:
+	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped) override
+	{
+		Super::InitializeFromMeta(MetaAsset, InitialCount, bIsCurrentlyEquipped);
+		
+		Count = InitialCount;
+	}
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory Item")
+	int32 Count;
+	
+	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(EItemSlot)> /*WidgetHandler*/)>;
+	using UnsubscribeFuncType = TFunction<void(FDelegateHandle)>;
+
+	void SetEventSubscriptionFunctions(SubscribeFuncType InSubscribeFunc, UnsubscribeFuncType InUnsubscribeFunc)
+	{
+		SubscribeFunction = MoveTemp(InSubscribeFunc);
+		UnsubscribeFunction = MoveTemp(InUnsubscribeFunc);
+	}
+	
+	FDelegateHandle SubscribeToFilterChanges(UObject* SubscriberWidget, TFunction<void(EItemSlot)> WidgetHandler)
 	{
 		if (SubscribeFunction)
 		{
@@ -95,30 +134,42 @@ public:
 			UnsubscribeFunction(Handle);
 		}
 	}
-	
-	bool operator==(const UInventoryListItemData& Other) const
-	{
-        
-		return ItemId == Other.ItemId &&
-			   ItemSlug == Other.ItemSlug && 
-			   Count == Other.Count &&
-			   bIsEquipped == Other.bIsEquipped;
-		// return ItemId == Other.ItemId && Count == Other.Count && bIsEquipped == Other.bIsEquipped;
-
-		/*
-		 *
-		 *  Name.ToString() == Other.Name.ToString() &&
-		 *  Tier == Other.Tier &&  
-		 *  ItemType == Other.ItemType &&
-		 *  SlotType == Other.SlotType && 
-		 */
-	}
-	
-	FOnIsEquippedChanged OnIsEquippedChanged;
+	// TODO:: need this maybe?
+	// bool operator==(const UInventoryListItemData& Other) const
+	// {
+	// 	// Compare relevant fields. Base IsSameItem can be used if it compares enough.
+	// 	return Super::IsSameItem(Other) && 
+	// 		   Count == Other.Count;
+	// }
 
 private:
 	SubscribeFuncType SubscribeFunction;
 	UnsubscribeFuncType UnsubscribeFunction;
+};
+
+UCLASS(BlueprintType, DefaultToInstanced)
+class ASYNCCUSTOMISATION_API USkinListItemData : public UBaseListItemData
+{
+	GENERATED_BODY()
+
+public:
+	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped) override
+	{
+		Super::InitializeFromMeta(MetaAsset, InitialCount, bIsCurrentlyEquipped);
+
+		if (const UItemShaderMetaAsset* ShaderMeta = Cast<UItemShaderMetaAsset>(MetaAsset))
+		{
+			ColorTint = ShaderMeta->ColorTint;
+		}
+		else
+		{
+			ColorTint = FLinearColor::Black;
+		}
+	}
+
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
+	bool bIsOwned = false;
 	
-	bool bIsEquipped = false;
+	UPROPERTY(BlueprintReadOnly, Category = "Shader Item")
+	FLinearColor ColorTint;
 };

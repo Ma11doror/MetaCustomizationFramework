@@ -16,7 +16,7 @@ class UCustomizationAssetManager;
 class USomatotypeDataAsset;
 DECLARE_LOG_CATEGORY_EXTERN(LogCustomizationComponent, Log, All);
 
-enum class EItemType : uint8;
+enum class EItemSlot : uint8;
 class UBodyPartAsset;
 class UMaterialCustomizationDataAsset;
 class UMaterialPackCustomizationDA;
@@ -140,11 +140,8 @@ protected:
 		TSet<EBodyPartType>& FinalUsedPartTypes,
 		const TArray<FName>& FinalActiveSlugs,
 		const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap);
-	
-	void UpdateMaterialsForBodyPartChanges(
-	FCustomizationContextData& TargetStateToModify, 
-	const FResolvedVariantInfo& ResolvedVariantData);
 
+	void UpdateMaterialsForBodyPartChanges(FCustomizationContextData& TargetStateToModify, const FResolvedVariantInfo& ResolvedVariantData);
 
 	void ApplyBodySkin(const FCustomizationContextData& TargetState,
 	                   const USomatotypeDataAsset* SomatotypeDataAsset,
@@ -158,6 +155,8 @@ protected:
 	                             USomatotypeDataAsset* LoadedSomatotypeDataAsset,
 	                             TArray<UBodyPartAsset*> LoadedBodyPartAssets);
 
+	void ProcessColoration(FCustomizationContextData& TargetStateToModify, TArray<UObject*> LoadedMaterialAssets);
+	
 	void HandleInvalidationPipelineCompleted();
 
 	TStrongObjectPtr<UTimerComponent> InvalidationTimer = nullptr;
