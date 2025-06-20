@@ -21,10 +21,14 @@ public:
 
 protected:
 	virtual void NativeOnListItemObjectSet(UObject* ListItemObject) override;
-
+	virtual void NativeOnEntryReleased() override;
 	UFUNCTION(BlueprintImplementableEvent)
 	void UpdateUIData(USkinListItemData* InData);
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
 	USkinListItemData* InventoryListItemData;
+
+	UFUNCTION()
+	void HandleItemDataChanged();
+	
 };

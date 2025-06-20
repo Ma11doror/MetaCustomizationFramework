@@ -41,7 +41,6 @@ class ASYNCCUSTOMISATION_API UInventoryWidget : public UActivatableWidget
     GENERATED_BODY()
 
 public:
-    UInventoryWidget(const FObjectInitializer& ObjectInitializer);
     
     virtual void NativeDestruct() override;
 
@@ -55,6 +54,12 @@ public:
 
     void SetActiveInventoryTab(EInventorySwitcherTab Tab);
 
+    UFUNCTION(BlueprintCallable)
+    void FinalizePaletteClosure();
+    
+    UFUNCTION(BlueprintCallable)
+    void FinalizePaletteOpening(const FName& InItemSlug);
+    
    // UPROPERTY(BlueprintReadWrite, Category="Inventory|Actions")
     FOnRequestColorPalette OnRequestColorPalette;
 
@@ -69,6 +74,12 @@ protected:
 
     void OnBackButtonClicked();
 
+    UFUNCTION(BlueprintImplementableEvent)
+    void PlayClosePaletteAnimation();
+    
+    UFUNCTION(BlueprintImplementableEvent)
+    void PlayOpenPaletteAnimation(const FName& InItemSlug);
+    
     UFUNCTION(BlueprintImplementableEvent)
     void PlayFailEquipAnimation();
     

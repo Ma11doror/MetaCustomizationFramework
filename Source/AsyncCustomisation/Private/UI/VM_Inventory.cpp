@@ -50,6 +50,11 @@ EItemSlot UVM_Inventory::GetFilterType() const
 	return LastFilterType;
 }
 
+FName UVM_Inventory::GetItemSlugForColorPalette() const
+{
+	return ItemSlugForColorPalette;
+}
+
 void UVM_Inventory::Initialize(UInventoryComponent* InInventoryComp, UCustomizationComponent* InCustomizationComp)
 {
 	UE_LOG(LogViewModel, Log, TEXT("UVM_Inventory::Initialize - Initializing with components."));
@@ -308,8 +313,55 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
         }
     }
 
+	// --- Step 3: Close palette only if equip not a skin for current item ---
+	// TODO:: test if it feels ok
 
-	// --- Step 3: Get corrupted types EItemType ---
+	// Check if we should close the color palette UI:
+	// If the item whose palette is currently open has changed in a way *other than* just applying a new skin,
+	// then we close the palette. But if the only change was a new skin on the same item, and no other slots changed,
+	// we keep the palette open. This helps avoid jarring UI updates when the user is just changing item appearance.
+	if (ItemSlugForColorPalette != NAME_None)
+    {
+        bool bOnlySkinChanged = false;
+        UItemMetaAsset* PaletteItemMeta = FindMetaAssetBySlug(ItemSlugForColorPalette);
+        if (PaletteItemMeta)
+        {
+            const EItemSlot PaletteItemSlot = PaletteItemMeta->ItemSlot;
+            const FInventoryEquippedItemData* OldData = EquippedItemsMap.Find(PaletteItemSlot);
+            const FInventoryEquippedItemData* NewData = NewCalculatedEquippedMap.Find(PaletteItemSlot);
+        	
+            if (OldData && NewData && OldData->ItemSlug == NewData->ItemSlug && OldData->AppliedSkinSlug != NewData->AppliedSkinSlug)
+            {
+                if (EquippedItemsMap.Num() == NewCalculatedEquippedMap.Num())
+                {
+                    bool bOtherSlotsAreIdentical = true;
+                    for (const auto& Pair : NewCalculatedEquippedMap)
+                    {
+                        if (Pair.Key == PaletteItemSlot) continue; 
+
+                        const FInventoryEquippedItemData* OldValue = EquippedItemsMap.Find(Pair.Key);
+                        if (!OldValue || !(*OldValue == Pair.Value))
+                        {
+                            bOtherSlotsAreIdentical = false;
+                            break;
+                        }
+                    }
+
+                    if (bOtherSlotsAreIdentical)
+                    {
+                        bOnlySkinChanged = true;
+                    }
+                }
+            }
+        }
+		
+        if (!bOnlySkinChanged)
+        {
+            ClearColorPalette();
+        }
+    }
+
+	// --- Step 4: Get corrupted types EItemType ---
 	TSet<EItemSlot> AffectedSlots;
 	
 	// diff NewCalculatedEquippedMap and this->EquippedItemsMap
@@ -326,7 +378,6 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 
 	for (const EItemSlot& Key : CurrentKeysSet.Intersect(NewKeysSet))
 	{
-		// Используем наш перегруженный оператор== для FInventoryEquippedItemData
 		if (!(EquippedItemsMap.FindChecked(Key) == NewCalculatedEquippedMap.FindChecked(Key)))
 		{
 			AffectedSlots.Add(Key);
@@ -338,10 +389,10 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 		UE_LOG(LogViewModel, Verbose, TEXT("HandleEquippedItemsUpdate: No changes detected in EquippedItemsMap. Skipping broadcasts for slots."));
 	}
 
-	// --- Step 4: update map in ViewModel ---
+	// --- Step 5: update map in ViewModel ---
 	SetEquippedItemsMap(NewCalculatedEquippedMap); 
 
-	// Step 5: Broadcast to only changed types
+	// Step 6: Broadcast to only changed types
 	if (!AffectedSlots.IsEmpty())
 	{
 		UE_LOG(LogViewModel, Log, TEXT("HandleEquippedItemsUpdate: Broadcasting changes for affected slots: %d types."), AffectedSlots.Num());
@@ -351,7 +402,7 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 		}
 	}
 
-	// --- Step 6: update bIsEquipped in InventoryItemsList ---
+	// --- Step 7: update bIsEquipped in InventoryItemsList ---
 	for (TObjectPtr<UInventoryListItemData>& ItemDataPtr  : InventoryItemsList)
 	{
 		if (!ItemDataPtr) continue; 
@@ -361,6 +412,22 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 		{
 			ItemDataPtr->SetIsEquipped(bShouldBeEquippedNow);
 			UE_LOG(LogViewModel, Verbose, TEXT("... Updating bIsEquipped for %s"), *ItemDataPtr->ItemSlug.ToString());
+		}
+	}
+
+	// --- Step 8: update bIsEquipped in the color palette list, if it's active ---
+	if (!SkinsForColorPalette.IsEmpty())
+	{
+		for (TObjectPtr<USkinListItemData> SkinData : SkinsForColorPalette)
+		{
+			if (SkinData)
+			{
+				if (SkinData)
+				{
+					const bool bShouldBeEquippedNow = AllEquippedSlugsForState.Contains(SkinData->ItemSlug);
+					SkinData->SetIsEquipped(bShouldBeEquippedNow);
+				}	
+			}
 		}
 	}
 	
@@ -1001,9 +1068,40 @@ void UVM_Inventory::PopulateViewModelProperties()
 			if (UItemMetaAsset* MetaAsset = FoundMetaPtr->Get())
 			{
 				UInventoryListItemData* NewItemObject = NewObject<UInventoryListItemData>(this);
+				
+				NewItemObject->SetEventSubscriptionFunctions(
+					[ViewModelWeakPtr = MakeWeakObjectPtr(this)](UObject* SubscriberWidget, TFunction<void(EItemSlot)> WidgetHandler) -> FDelegateHandle
+					{
+						// ensureAlwaysMsgf(ViewModelWeakPtr.IsValid(), TEXT("ViewModelWeakPtr is invalid inside Subscribe lambda creation!"));
+						if (ViewModelWeakPtr.IsValid() && SubscriberWidget && WidgetHandler)
+						{
+							UVM_Inventory* VM = ViewModelWeakPtr.Get();
+							FDelegateHandle Handle = VM->OnFilterMethodChanged.AddWeakLambda(SubscriberWidget,
+																							   [WidgetHandler](EItemSlot FilterType)
+																							   {
+																								   ensureAlways(WidgetHandler);
+																								   WidgetHandler(FilterType);
+																							   }
+							);
 
-				// ... (SetEventSubscriptionFunctions остается без изменений)
-
+							if (WidgetHandler)
+							{
+								WidgetHandler(VM->GetFilterType());
+							}
+							return Handle;
+						}
+						return FDelegateHandle();
+					},
+					[ViewModelWeakPtr = MakeWeakObjectPtr(this)](FDelegateHandle Handle)
+					{
+						ensureAlwaysMsgf(ViewModelWeakPtr.IsValid(), TEXT("ViewModelWeakPtr is invalid inside Subscribe lambda creation!"));
+						if (ViewModelWeakPtr.IsValid() && Handle.IsValid())
+						{
+							ViewModelWeakPtr->OnFilterMethodChanged.Remove(Handle);
+						}
+					}
+				);
+				
 				NewItemObject->InitializeFromMeta(
 					MetaAsset,
 					Count,
@@ -1085,24 +1183,15 @@ bool UVM_Inventory::GetIsColorPaletteLoading() const
 void UVM_Inventory::RequestColorPaletteForItem(FName MainItemSlug)
 {
 	UE_LOG(LogViewModel, Log, TEXT("RequestColorPaletteForItem: Requested for item slug '%s'"), *MainItemSlug.ToString());
-    if (ItemSlugForColorPalette == MainItemSlug && MainItemSlug != NAME_None)
-    {
-        if (SkinsForColorPalette.Num() > 0 && !IsColorPaletteLoading) {
-             UE_LOG(LogViewModel, Log, TEXT("RequestColorPaletteForItem: Palette already populated for '%s'."), *MainItemSlug.ToString());
-            return;
-        }
-    }
-    
-    if (MainItemSlug == NAME_None)
-    {
-        ClearColorPalette();
-        return;
-    }
+	if (MainItemSlug == NAME_None)
+	{
+		ClearColorPalette();
+		return;
+	}
 
-    SetItemSlugForColorPalette(MainItemSlug);
-    SetSkinsForColorPalette({});      
-    SetIsColorPaletteLoading(true);
-
+	SetItemSlugForColorPalette(MainItemSlug);
+	SetSkinsForColorPalette({});
+	SetIsColorPaletteLoading(true);
 	
 	//FString AssetTypeString = UItemShaderMetaAsset::StaticClass()->GetPrimaryAssetId();
 	FPrimaryAssetId MainItemAssetId = FPrimaryAssetId(GLOBAL_CONSTANTS::PrimaryItemAssetType, MainItemSlug);

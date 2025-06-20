@@ -120,7 +120,10 @@ public:
     FOnFilterMethodChanged OnFilterMethodChanged;
 
     EItemSlot GetFilterType() const;
-    
+
+    UFUNCTION(BlueprintPure, Category = "ViewModel|State")
+    FName GetItemSlugForColorPalette() const;
+
 protected:
     UFUNCTION(BlueprintCallable, Category = "ViewModel")
     void Initialize(UInventoryComponent* InInventoryComp, UCustomizationComponent* InCustomizationComp);

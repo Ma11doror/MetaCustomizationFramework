@@ -11,6 +11,7 @@ enum class EItemSlot : uint8;
 enum class EItemTier : uint8;
 
 DECLARE_DELEGATE_OneParam(FOnIsEquippedChanged, bool /*InIsEquipped*/);
+DECLARE_MULTICAST_DELEGATE(FOnItemDataChanged);
 
 UCLASS(BlueprintType, Abstract, DefaultToInstanced)
 class ASYNCCUSTOMISATION_API UBaseListItemData : public UObject
@@ -21,11 +22,14 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Inventory Item")
 	bool GetIsEquipped() const { return bIsEquipped; }
 	
-	void SetIsEquipped(bool bNewValue)
+	virtual void SetIsEquipped(bool bNewValue)
 	{
 		bIsEquipped = bNewValue;
 		OnIsEquippedChanged.ExecuteIfBound(bIsEquipped);
+		OnItemDataChanged.Broadcast();
 	}
+		
+	FOnItemDataChanged OnItemDataChanged;
 	
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	FPrimaryAssetId ItemId; 
@@ -50,7 +54,7 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	EItemType ItemType = EItemType::None;
-	
+
 	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped)
 	{
 		if (!MetaAsset) return;
@@ -89,7 +93,7 @@ public:
 	FOnIsEquippedChanged OnIsEquippedChanged;
 	
 private:
-	
+	UPROPERTY()
 	bool bIsEquipped = false;
 };
 

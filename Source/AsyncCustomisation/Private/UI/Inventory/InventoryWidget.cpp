@@ -11,12 +11,6 @@
 #include "UI/Inventory/Components/InventoryItemEntryWidget.h"
 #include "UI/Inventory/Data/InventoryListItemData.h"
 
-
-UInventoryWidget::UInventoryWidget(const FObjectInitializer& ObjectInitializer)
-    : Super(ObjectInitializer)
-{
-}
-
 void UInventoryWidget::NativeDestruct()
 {
     Super::NativeDestruct();
@@ -187,7 +181,19 @@ void UInventoryWidget::OnListTabOpened()
 
 void UInventoryWidget::HandleRequestColorPalette(FName ItemSlug)
 {
-    InventoryViewModel->RequestColorPaletteForItem(ItemSlug);
+    if (InventoryViewModel)
+    {
+        const FName CurrentPaletteSlug = InventoryViewModel->GetItemSlugForColorPalette();
+        if (CurrentPaletteSlug != NAME_None && CurrentPaletteSlug == ItemSlug)
+        {
+            PlayClosePaletteAnimation();
+        }
+        else
+        {
+            //InventoryViewModel->RequestColorPaletteForItem(ItemSlug);
+            PlayOpenPaletteAnimation(ItemSlug);
+        }
+    }
 }
 
 void UInventoryWidget::OnMainListItemObjectSet(UUserWidget& InEntryWidget)
@@ -229,5 +235,21 @@ void UInventoryWidget::SetActiveInventoryTab(EInventorySwitcherTab Tab)
 
     default:
         UE_LOG(LogTemp, Warning, TEXT("Unknown EInventorySwitcherTab value!"));
+    }
+}
+
+void UInventoryWidget::FinalizePaletteClosure()
+{
+    if (InventoryViewModel)
+    {
+        InventoryViewModel->ClearColorPalette();
+    }
+}
+
+void UInventoryWidget::FinalizePaletteOpening(const FName& InItemSlug)
+{
+    if (InventoryViewModel)
+    {
+        InventoryViewModel->RequestColorPaletteForItem(InItemSlug);
     }
 }
