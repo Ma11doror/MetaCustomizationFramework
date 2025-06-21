@@ -20,12 +20,12 @@ class ASYNCCUSTOMISATION_API UBaseListItemData : public UObject
 
 public:
 	UFUNCTION(BlueprintPure, Category = "Inventory Item")
-	bool GetIsEquipped() const { return bIsEquipped; }
+	bool GetIsEquipped() const { return IsEquipped; }
 	
 	virtual void SetIsEquipped(bool bNewValue)
 	{
-		bIsEquipped = bNewValue;
-		OnIsEquippedChanged.ExecuteIfBound(bIsEquipped);
+		IsEquipped = bNewValue;
+		OnIsEquippedChanged.ExecuteIfBound(IsEquipped);
 		OnItemDataChanged.Broadcast();
 	}
 		
@@ -54,6 +54,9 @@ public:
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	EItemType ItemType = EItemType::None;
+	
+	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
+	bool IsEquipped = false;
 
 	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped)
 	{
@@ -68,7 +71,7 @@ public:
 		ItemSlot = MetaAsset->ItemSlot;
 		ItemType = MetaAsset->ItemType;
 		
-		bIsEquipped = bIsCurrentlyEquipped;
+		IsEquipped = bIsCurrentlyEquipped;
 	}
 
 	bool operator==(const UBaseListItemData& Other) const
@@ -78,7 +81,7 @@ public:
 			   ItemSlug == Other.ItemSlug &&
 			   	Tier == Other.Tier &&  
 		//	   Count == Other.Count &&
-			   bIsEquipped == Other.bIsEquipped;
+			   IsEquipped == Other.IsEquipped;
 		// return ItemId == Other.ItemId && Count == Other.Count && bIsEquipped == Other.bIsEquipped;
 
 		/*
@@ -91,10 +94,6 @@ public:
 	}
 	
 	FOnIsEquippedChanged OnIsEquippedChanged;
-	
-private:
-	UPROPERTY()
-	bool bIsEquipped = false;
 };
 
 
@@ -106,12 +105,15 @@ public:
 	virtual void InitializeFromMeta(UItemMetaAsset* MetaAsset, int32 InitialCount, bool bIsCurrentlyEquipped) override
 	{
 		Super::InitializeFromMeta(MetaAsset, InitialCount, bIsCurrentlyEquipped);
-		
+		HasSkins = MetaAsset->AvailableSkinAssetIds.Num() > 0;
 		Count = InitialCount;
 	}
 	
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Item")
 	int32 Count;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Inventory Item")
+	bool HasSkins;
 	
 	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(EItemSlot)> /*WidgetHandler*/)>;
 	using UnsubscribeFuncType = TFunction<void(FDelegateHandle)>;

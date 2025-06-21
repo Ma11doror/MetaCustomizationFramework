@@ -226,6 +226,7 @@ void UInventoryWidget::SetActiveInventoryTab(EInventorySwitcherTab Tab)
     {
     case EInventorySwitcherTab::SlotsView:
         InventorySwitcher->SetActiveWidgetIndex(0);
+        FinalizePaletteClosure();
         break;
     case EInventorySwitcherTab::ItemsListView:
         InventorySwitcher->SetActiveWidgetIndex(1);
