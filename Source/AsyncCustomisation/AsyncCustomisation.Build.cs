@@ -8,7 +8,7 @@ public class AsyncCustomisation : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "DeveloperSettings", "CommonUI" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "DeveloperSettings", "CommonUI", "GameplayTags" });
 		
 		PrivateDependencyModuleNames.AddRange(new string[] {"UMG", "CommonUI", "ModelViewViewModel" });
 			//PrivateDependencyModuleNames.AddRange(new string[] {"UMG", "CommonUI", "ModelViewViewModelPreview", "ModelViewViewModel" });

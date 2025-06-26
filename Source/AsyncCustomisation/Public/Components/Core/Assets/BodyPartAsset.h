@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 
 #include "Algo/AllOf.h"
 #include "Constants/GlobalConstants.h"
@@ -24,8 +25,8 @@ struct FBodyPartVariant
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	TArray<TObjectPtr<UMaterialInterface>> DefaultMaterials;
 	
-	UPROPERTY(BlueprintReadWrite, EditAnywhere)
-	EBodyPartType BodyPartType = EBodyPartType::None;
+	// UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	// EBodyPartType BodyPartType = EBodyPartType::None;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Requirements")
 	TArray<FPrimaryAssetId> RequiredItemsAssetIds;
@@ -34,7 +35,7 @@ struct FBodyPartVariant
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "Requirements")
 	FSkinFlagCombination SkinCoverageFlags;
 
-	bool IsValid() const { return BodyPartSkeletalMesh && BodyPartType != EBodyPartType::None; }
+	bool IsValid() const { return BodyPartSkeletalMesh != nullptr; }
 };
 
 USTRUCT(BlueprintType)
@@ -53,9 +54,21 @@ class ASYNCCUSTOMISATION_API UBodyPartAsset : public UPrimaryDataAsset
 	GENERATED_BODY()
 
 public:
+	
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, meta=(AssetRegistrySearchable, GameplayTagFilter="Slot.Item"))
+	FGameplayTag TargetItemSlot;
+	
 	UPROPERTY(BlueprintReadWrite, EditAnywhere)
 	TArray<FBodyPartVariant> Variants;
 
+#if WITH_EDITOR
+	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override
+	{
+		Super::GetAssetRegistryTags(OutTags);
+		OutTags.Add(FAssetRegistryTag("TargetItemSlot", TargetItemSlot.ToString(), FAssetRegistryTag::ETagType::TT_Alphabetical));
+	}
+#endif
+	
 	virtual FPrimaryAssetId GetPrimaryAssetId() const override
 	{
 		return FPrimaryAssetId(GLOBAL_CONSTANTS::PrimaryBodyPartAssetType, GetFName());

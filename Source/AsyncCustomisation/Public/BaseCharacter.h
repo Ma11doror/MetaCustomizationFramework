@@ -30,44 +30,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Animation")
 	UClass* AnimBP;
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* BodyMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* LegsMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* HandsMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* WristsMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* FeetMesh;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* BeardMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* TorsoMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* NeckMesh;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* FaceAccessoryMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* BackAccessoryFirstMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* BackAccessorySecondaryMesh;
-	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* LegKnifeMesh;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CustomizableMesh", Transient)
-	USkeletalMeshComponent* HairMesh;
-	
 	UPROPERTY(Category=Character, VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UCustomizationComponent> CustomizationComponent = nullptr;
 
 	UPROPERTY(Category=Character, VisibleAnywhere, BlueprintReadOnly, meta=(AllowPrivateAccess="true"))
 	TObjectPtr<UInventoryComponent> InventoryComponent = nullptr;
-
-	UFUNCTION(BlueprintCallable)
-	void SetupMasterPose();
 	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;

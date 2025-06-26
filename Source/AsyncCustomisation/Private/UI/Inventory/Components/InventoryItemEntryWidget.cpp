@@ -28,7 +28,7 @@ void UInventoryItemEntryWidget::NativeOnListItemObjectSet(UObject* ListItemObjec
 		FilterDelegateHandle.Reset();
 	}
 	FilterDelegateHandle = InventoryListItemData->SubscribeToFilterChanges(this, 
-		[this](EItemSlot NewFilterType) 
+		[this](const FGameplayTag NewFilterType) 
 		{
 			HandleFilterChanged(NewFilterType);
 		}

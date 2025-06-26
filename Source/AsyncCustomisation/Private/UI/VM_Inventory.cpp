@@ -45,7 +45,7 @@ TArray<UObject*> UVM_Inventory::GetInventoryItemsAsObjects() const
 	return ObjectList;
 }
 
-EItemSlot UVM_Inventory::GetFilterType() const
+FGameplayTag UVM_Inventory::GetFilterType() const
 {
 	return LastFilterType;
 }
@@ -53,6 +53,16 @@ EItemSlot UVM_Inventory::GetFilterType() const
 FName UVM_Inventory::GetItemSlugForColorPalette() const
 {
 	return ItemSlugForColorPalette;
+}
+
+FInventoryEquippedItemData UVM_Inventory::GetEquippedItemForSlot(const FGameplayTag SlotTag)
+{
+	if (SlotTag.IsValid())
+	{
+		const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(SlotTag);
+		return FoundItem ? *FoundItem : FInventoryEquippedItemData();
+	}
+	return FInventoryEquippedItemData();
 }
 
 void UVM_Inventory::Initialize(UInventoryComponent* InInventoryComp, UCustomizationComponent* InCustomizationComp)
@@ -140,27 +150,32 @@ void UVM_Inventory::OnEntryItemClicked(const FName& InItemSlug)
 	}
 }
 
-void UVM_Inventory::RequestUnequipSlot(ECustomizationSlotType SlotToUnequip)
+void UVM_Inventory::RequestUnequipSlot(FGameplayTag SlotToUnequip)
 {
-	if (CustomizationComponent.IsValid())
-	{
-		if (SlotToUnequip != ECustomizationSlotType::Unknown)
-		{
-			UE_LOG(LogViewModel, Log, TEXT("UVM_Inventory::RequestUnequipSlot - Requesting to unequip slot: %s"), *UEnum::GetValueAsString(SlotToUnequip));
-			
-			CustomizationComponent->RequestUnequipSlot(SlotToUnequip);
-			// TODO:: Implement in  CustomizationComponent. Maybe it will be needed
-		}
-		else
-		{
-			UE_LOG(LogViewModel, Warning, TEXT("UVM_Inventory::RequestUnequipSlot - Received Unknown slot type. Ignoring request."));
-		}
-	}
-	else
-	{
-		UE_LOG(LogViewModel, Warning, TEXT("UVM_Inventory::RequestUnequipSlot - CustomizationComponent is invalid. Cannot unequip slot."));
-	}
+	
 }
+//
+// void UVM_Inventory::RequestUnequipSlot(ECustomizationSlotType SlotToUnequip)
+// {
+// 	// if (CustomizationComponent.IsValid())
+// 	// {
+// 	// 	if (SlotToUnequip != ECustomizationSlotType::Unknown)
+// 	// 	{
+// 	// 		UE_LOG(LogViewModel, Log, TEXT("UVM_Inventory::RequestUnequipSlot - Requesting to unequip slot: %s"), *UEnum::GetValueAsString(SlotToUnequip));
+// 	// 		
+// 	// 		CustomizationComponent->RequestUnequipSlot(SlotToUnequip);
+// 	// 		// TODO:: Implement in  CustomizationComponent. Maybe it will be needed
+// 	// 	}
+// 	// 	else
+// 	// 	{
+// 	// 		UE_LOG(LogViewModel, Warning, TEXT("UVM_Inventory::RequestUnequipSlot - Received Unknown slot type. Ignoring request."));
+// 	// 	}
+// 	// }
+// 	// else
+// 	// {
+// 	// 	UE_LOG(LogViewModel, Warning, TEXT("UVM_Inventory::RequestUnequipSlot - CustomizationComponent is invalid. Cannot unequip slot."));
+// 	// }
+// }
 
 void UVM_Inventory::RequestDropItem(FPrimaryAssetId ItemIdToDrop, int32 CountToDrop)
 {
@@ -189,7 +204,7 @@ void UVM_Inventory::SetInventoryItemsList(const TArray<TObjectPtr<UInventoryList
 	UE_MVVM_SET_PROPERTY_VALUE(InventoryItemsList, InNewList);
 }
 
-void UVM_Inventory::SetEquippedItemsMap(const TMap<EItemSlot, FInventoryEquippedItemData>& NewMap)
+void UVM_Inventory::SetEquippedItemsMap(const TMap<FGameplayTag, FInventoryEquippedItemData>& NewMap)
 {
 	bool bMapsAreEqual = true;
 	if (EquippedItemsMap.Num() != NewMap.Num())
@@ -200,7 +215,7 @@ void UVM_Inventory::SetEquippedItemsMap(const TMap<EItemSlot, FInventoryEquipped
 	{
 		for (const auto& Pair : NewMap)
 		{
-			const EItemSlot& Key = Pair.Key;
+			const FGameplayTag& Key = Pair.Key;
 			const FInventoryEquippedItemData& NewValue = Pair.Value;
 			const FInventoryEquippedItemData* CurrentValuePtr = EquippedItemsMap.Find(Key);
 			if (!CurrentValuePtr || !(*CurrentValuePtr == NewValue))
@@ -217,7 +232,7 @@ void UVM_Inventory::SetEquippedItemsMap(const TMap<EItemSlot, FInventoryEquipped
 		//EquippedItemsMap = NewMap;
 		
 		UE_MVVM_SET_PROPERTY_VALUE(EquippedItemsMap, NewMap);
-		BroadcastEquippedItemChanges();
+		//UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(EquippedItemsMap);
 	}
 	else
 	{
@@ -236,16 +251,21 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 	UE_LOG(LogViewModel, Log, TEXT("UVM_Inventory::HandleEquippedItemsUpdate - Received equipment update signal. Applying targeted slot update."));
 
 	// --- Step 1: Calculate new map ---
-	TMap<EItemSlot, FInventoryEquippedItemData> NewCalculatedEquippedMap;
+	 TMap<FGameplayTag, FInventoryEquippedItemData> NewCalculatedEquippedMap;
 	TSet<FName> AllEquippedSlugsForState;
 
-	auto FindMetaAssetBySlug = [this](FName Slug) -> UItemMetaAsset* {
+	auto FindMetaAssetBySlug = [this](const FName Slug) -> UItemMetaAsset* {
+		if (Slug.IsNone())
+		{
+			return nullptr;
+		}
+
 		for (const auto& CachePair : LoadedMetaCache)
 		{
-			if (CachePair.Value )
+			if (CachePair.Value)
 			{
 				// UE_LOG(LogViewModel, Warning, TEXT("  Cached MetaAsset FName: %s"), *CachePair.Value->GetFName().ToString());
-				if (CachePair.Value->GetFName() == Slug)
+				if (CachePair.Value && CachePair.Key.PrimaryAssetName == Slug)
 				{
 					return CachePair.Value;
 				}
@@ -254,8 +274,9 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 		return nullptr;
 	};
 	
+	
 	auto ProcessBaseEquippedItemSlugForMap =
-		[&](FName ItemSlug, TMap<EItemSlot, FInventoryEquippedItemData>& TargetMap)
+		[&](FName ItemSlug, TMap<FGameplayTag, FInventoryEquippedItemData>& TargetMap)
 	{
 			if (ItemSlug == NAME_None) return;
 
@@ -264,8 +285,8 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 			
 			if (MetaAsset->ItemType == EItemType::Skin) return;
 
-			EItemSlot CurrentItemSlot = MetaAsset->ItemSlot;
-			if (CurrentItemSlot == EItemSlot::None) return;
+			FGameplayTag CurrentItemSlotTag = MetaAsset->UISlotCategoryTag;
+			if (!CurrentItemSlotTag.IsValid()) return;
 
 			FInventoryEquippedItemData EquippedData;
 			EquippedData.ItemName = MetaAsset->Name;
@@ -274,12 +295,12 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 			EquippedData.ItemSlug = MetaAsset->GetPrimaryAssetId().PrimaryAssetName;
 			// AppliedSkinSlug == NAME_None by default
 			
-			TargetMap.Add(CurrentItemSlot, EquippedData);
+			TargetMap.Add(CurrentItemSlotTag, EquippedData);
 	};
-
+	
 	// Collect ALL equipped slugs first, including materials, for 'IsEquipped' checks.
-	for (const auto& Pair : NewState.EquippedBodyPartsItems) { AllEquippedSlugsForState.Add(Pair.Key); }
-	for (const auto& Pair : NewState.EquippedMaterialsMap) { AllEquippedSlugsForState.Add(Pair.Key); }
+	for (const auto& Pair : NewState.EquippedBodyPartsItems) { AllEquippedSlugsForState.Add(Pair.Value); }
+	for (const auto& Pair : NewState.EquippedMaterialsMap) { AllEquippedSlugsForState.Add(Pair.Value); }
 	for (const auto& SlotPair : NewState.EquippedCustomizationItemActors)
 	{
 		for (const FEquippedItemActorsInfo& ActorInfo : SlotPair.Value.EquippedItemActors)
@@ -287,32 +308,29 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 			AllEquippedSlugsForState.Add(ActorInfo.ItemSlug);
 		}
 	}
-
 	// Now, populate the map for UI slots, IGNORING materials/skins.
-	for (const auto& Pair : NewState.EquippedBodyPartsItems) { ProcessBaseEquippedItemSlugForMap(Pair.Key, NewCalculatedEquippedMap); }
-	for (const auto& SlotPair : NewState.EquippedCustomizationItemActors)
-	{
-		for (const FEquippedItemActorsInfo& ActorInfo : SlotPair.Value.EquippedItemActors)
-		{
+	// NewState.EquippedBodyPartsItems is now TMap<FGameplayTag, FName>
+	for (const auto& Pair : NewState.EquippedBodyPartsItems) { ProcessBaseEquippedItemSlugForMap(Pair.Value, NewCalculatedEquippedMap); }
+	for (const auto& SlotPair : NewState.EquippedCustomizationItemActors) {
+		for (const FEquippedItemActorsInfo& ActorInfo : SlotPair.Value.EquippedItemActors) {
 			ProcessBaseEquippedItemSlugForMap(ActorInfo.ItemSlug, NewCalculatedEquippedMap);
 		}
 	}
     
     // Step 2. Update info about skins ---
-    for (const auto& Pair : NewState.EquippedMaterialsMap)
-    {
-        const FName& SkinSlug = Pair.Key;
-        UItemMetaAsset* SkinMetaAsset = FindMetaAssetBySlug(SkinSlug);
-
-        if (SkinMetaAsset && SkinMetaAsset->ItemType == EItemType::Skin)
-        {
-            if (FInventoryEquippedItemData* SlotData = NewCalculatedEquippedMap.Find(SkinMetaAsset->ItemSlot))
-            {
-                SlotData->AppliedSkinSlug = SkinSlug;
-            }
-        }
-    }
-
+	for (const auto& Pair : NewState.EquippedMaterialsMap)
+	{
+		const FName& SkinSlug = Pair.Value;
+		UItemMetaAsset* SkinMetaAsset = FindMetaAssetBySlug(SkinSlug);
+		if (SkinMetaAsset && SkinMetaAsset->ItemType == EItemType::Skin)
+		{
+			const FGameplayTag& TargetSlotTag = SkinMetaAsset->UISlotCategoryTag;
+			if (FInventoryEquippedItemData* SlotData = NewCalculatedEquippedMap.Find(TargetSlotTag))
+			{
+				SlotData->AppliedSkinSlug = SkinSlug;
+			}
+		}
+	}
 	// --- Step 3: Close palette only if equip not a skin for current item ---
 	// TODO:: test if it feels ok
 
@@ -321,122 +339,63 @@ void UVM_Inventory::HandleEquippedItemsUpdate(const FCustomizationContextData& N
 	// then we close the palette. But if the only change was a new skin on the same item, and no other slots changed,
 	// we keep the palette open. This helps avoid jarring UI updates when the user is just changing item appearance.
 	if (ItemSlugForColorPalette != NAME_None)
-    {
-        bool bOnlySkinChanged = false;
-        UItemMetaAsset* PaletteItemMeta = FindMetaAssetBySlug(ItemSlugForColorPalette);
-        if (PaletteItemMeta)
-        {
-            const EItemSlot PaletteItemSlot = PaletteItemMeta->ItemSlot;
-            const FInventoryEquippedItemData* OldData = EquippedItemsMap.Find(PaletteItemSlot);
-            const FInventoryEquippedItemData* NewData = NewCalculatedEquippedMap.Find(PaletteItemSlot);
-        	
-            if (OldData && NewData && OldData->ItemSlug == NewData->ItemSlug && OldData->AppliedSkinSlug != NewData->AppliedSkinSlug)
-            {
-                if (EquippedItemsMap.Num() == NewCalculatedEquippedMap.Num())
-                {
-                    bool bOtherSlotsAreIdentical = true;
-                    for (const auto& Pair : NewCalculatedEquippedMap)
-                    {
-                        if (Pair.Key == PaletteItemSlot) continue; 
-
-                        const FInventoryEquippedItemData* OldValue = EquippedItemsMap.Find(Pair.Key);
-                        if (!OldValue || !(*OldValue == Pair.Value))
-                        {
-                            bOtherSlotsAreIdentical = false;
-                            break;
-                        }
-                    }
-
-                    if (bOtherSlotsAreIdentical)
-                    {
-                        bOnlySkinChanged = true;
-                    }
-                }
-            }
-        }
-		
-        if (!bOnlySkinChanged)
-        {
-            ClearColorPalette();
-        }
-    }
-
-	// --- Step 4: Get corrupted types EItemType ---
-	TSet<EItemSlot> AffectedSlots;
-	
-	// diff NewCalculatedEquippedMap and this->EquippedItemsMap
-	TArray<EItemSlot> CurrentKeys;
-	TArray<EItemSlot> NewKeys;
-	EquippedItemsMap.GenerateKeyArray(CurrentKeys);
-	NewCalculatedEquippedMap.GenerateKeyArray(NewKeys);
-
-	TSet<EItemSlot> CurrentKeysSet(CurrentKeys);
-	TSet<EItemSlot> NewKeysSet(NewKeys);
-
-	AffectedSlots.Append(NewKeysSet.Difference(CurrentKeysSet));
-	AffectedSlots.Append(CurrentKeysSet.Difference(NewKeysSet));
-
-	for (const EItemSlot& Key : CurrentKeysSet.Intersect(NewKeysSet))
 	{
-		if (!(EquippedItemsMap.FindChecked(Key) == NewCalculatedEquippedMap.FindChecked(Key)))
+		bool bOnlySkinChanged = false;
+		UItemMetaAsset* PaletteItemMeta = FindMetaAssetBySlug(ItemSlugForColorPalette);
+		if (PaletteItemMeta)
 		{
-			AffectedSlots.Add(Key);
+			const FGameplayTag PaletteItemSlotTag = PaletteItemMeta->UISlotCategoryTag;
+			const FInventoryEquippedItemData* OldData = EquippedItemsMap.Find(PaletteItemSlotTag);
+			const FInventoryEquippedItemData* NewData = NewCalculatedEquippedMap.Find(PaletteItemSlotTag);
+
+			if (OldData && NewData && OldData->ItemSlug == NewData->ItemSlug && OldData->AppliedSkinSlug != NewData->AppliedSkinSlug)
+			{
+				if (EquippedItemsMap.Num() == NewCalculatedEquippedMap.Num())
+				{
+					bool bOtherSlotsAreIdentical = true;
+					for (const auto& Pair : NewCalculatedEquippedMap)
+					{
+						if (Pair.Key == PaletteItemSlotTag) continue;
+
+						const FInventoryEquippedItemData* OldValue = EquippedItemsMap.Find(Pair.Key);
+						if (!OldValue || !(*OldValue == Pair.Value))
+						{
+							bOtherSlotsAreIdentical = false;
+							break;
+						}
+					}
+
+					if (bOtherSlotsAreIdentical)
+					{
+						bOnlySkinChanged = true;
+					}
+				}
+			}
+		}
+
+		if (!bOnlySkinChanged)
+		{
+			ClearColorPalette();
 		}
 	}
-	
-	if (AffectedSlots.IsEmpty() && EquippedItemsMap.Num() == NewCalculatedEquippedMap.Num())
-	{
-		UE_LOG(LogViewModel, Verbose, TEXT("HandleEquippedItemsUpdate: No changes detected in EquippedItemsMap. Skipping broadcasts for slots."));
-	}
 
-	// --- Step 5: update map in ViewModel ---
+	// Step 4. Update the viewmodel's map, which will trigger broadcasts via its setter
 	SetEquippedItemsMap(NewCalculatedEquippedMap); 
 
-	// Step 6: Broadcast to only changed types
-	if (!AffectedSlots.IsEmpty())
-	{
-		UE_LOG(LogViewModel, Log, TEXT("HandleEquippedItemsUpdate: Broadcasting changes for affected slots: %d types."), AffectedSlots.Num());
-		for (const EItemSlot AffectedSlot : AffectedSlots)
-		{
-			BroadcastGetterForType(AffectedSlot);
+	// Step 5. update bIsEquipped in InventoryItemsList & SkinsForColorPalette
+	for (TObjectPtr<UInventoryListItemData>& ItemDataPtr  : InventoryItemsList) {
+		if (ItemDataPtr) {
+			ItemDataPtr->SetIsEquipped(AllEquippedSlugsForState.Contains(ItemDataPtr->ItemSlug));
 		}
 	}
 
-	// --- Step 7: update bIsEquipped in InventoryItemsList ---
-	for (TObjectPtr<UInventoryListItemData>& ItemDataPtr  : InventoryItemsList)
-	{
-		if (!ItemDataPtr) continue; 
-
-		bool bShouldBeEquippedNow = AllEquippedSlugsForState.Contains(ItemDataPtr->ItemSlug);
-		if (ItemDataPtr->GetIsEquipped() != bShouldBeEquippedNow)
-		{
-			ItemDataPtr->SetIsEquipped(bShouldBeEquippedNow);
-			UE_LOG(LogViewModel, Verbose, TEXT("... Updating bIsEquipped for %s"), *ItemDataPtr->ItemSlug.ToString());
-		}
-	}
-
-	// --- Step 8: update bIsEquipped in the color palette list, if it's active ---
-	if (!SkinsForColorPalette.IsEmpty())
-	{
-		for (TObjectPtr<USkinListItemData> SkinData : SkinsForColorPalette)
-		{
-			if (SkinData)
-			{
-				if (SkinData)
-				{
-					const bool bShouldBeEquippedNow = AllEquippedSlugsForState.Contains(SkinData->ItemSlug);
-					SkinData->SetIsEquipped(bShouldBeEquippedNow);
-				}	
+	if (!SkinsForColorPalette.IsEmpty()) {
+		for (TObjectPtr<USkinListItemData> SkinData : SkinsForColorPalette) {
+			if (SkinData) {
+				SkinData->SetIsEquipped(AllEquippedSlugsForState.Contains(SkinData->ItemSlug));
 			}
 		}
 	}
-	
-	// --- Step 7: broadcast to inventory list al well. Maybe not needed but ok for now TODO:: check ---
-	//if (bInventoryListNeedsUpdate)
-	//{
-	//	UE_LOG(LogViewModel, Log, TEXT("HandleEquippedItemsUpdate: Broadcasting change for InventoryItemsList due to bIsEquipped updates."));
-	//	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(InventoryItemsList);
-	//}
 	
 	LastKnownCustomizationState = NewState;
 }
@@ -518,14 +477,14 @@ void UVM_Inventory::HandleInventoryDeltaUpdate(UItemMetaAsset* InItem, const int
 			UInventoryListItemData* NewItemObject = NewObject<UInventoryListItemData>(this);
 
 			NewItemObject->SetEventSubscriptionFunctions(
-				[ViewModelWeakPtr = MakeWeakObjectPtr(this)](UObject* SubscriberWidget, TFunction<void(EItemSlot)> WidgetHandler) -> FDelegateHandle
+				[ViewModelWeakPtr = MakeWeakObjectPtr(this)](UObject* SubscriberWidget, TFunction<void(FGameplayTag)> WidgetHandler) -> FDelegateHandle
 				{
 					// ensureAlwaysMsgf(ViewModelWeakPtr.IsValid(), TEXT("ViewModelWeakPtr is invalid inside Subscribe lambda creation!"));
 					if (ViewModelWeakPtr.IsValid() && SubscriberWidget && WidgetHandler)
 					{
 						UVM_Inventory* VM = ViewModelWeakPtr.Get();
 						FDelegateHandle Handle = VM->OnFilterMethodChanged.AddWeakLambda(SubscriberWidget,
-						                                                                 [WidgetHandler](EItemSlot FilterSlot)
+						                                                                 [WidgetHandler](FGameplayTag FilterSlot)
 						                                                                 {
 							                                                                 if (WidgetHandler) WidgetHandler(FilterSlot);
 						                                                                 }
@@ -1068,20 +1027,20 @@ void UVM_Inventory::PopulateViewModelProperties()
 			if (UItemMetaAsset* MetaAsset = FoundMetaPtr->Get())
 			{
 				UInventoryListItemData* NewItemObject = NewObject<UInventoryListItemData>(this);
-				
+
 				NewItemObject->SetEventSubscriptionFunctions(
-					[ViewModelWeakPtr = MakeWeakObjectPtr(this)](UObject* SubscriberWidget, TFunction<void(EItemSlot)> WidgetHandler) -> FDelegateHandle
+					[ViewModelWeakPtr = MakeWeakObjectPtr(this)](UObject* SubscriberWidget, TFunction<void(FGameplayTag)> WidgetHandler) -> FDelegateHandle
 					{
 						// ensureAlwaysMsgf(ViewModelWeakPtr.IsValid(), TEXT("ViewModelWeakPtr is invalid inside Subscribe lambda creation!"));
 						if (ViewModelWeakPtr.IsValid() && SubscriberWidget && WidgetHandler)
 						{
 							UVM_Inventory* VM = ViewModelWeakPtr.Get();
 							FDelegateHandle Handle = VM->OnFilterMethodChanged.AddWeakLambda(SubscriberWidget,
-																							   [WidgetHandler](EItemSlot FilterType)
-																							   {
-																								   ensureAlways(WidgetHandler);
-																								   WidgetHandler(FilterType);
-																							   }
+							                                                                 [WidgetHandler](FGameplayTag FilterType)
+							                                                                 {
+								                                                                 ensureAlways(WidgetHandler);
+								                                                                 WidgetHandler(FilterType);
+							                                                                 }
 							);
 
 							if (WidgetHandler)
@@ -1118,28 +1077,6 @@ void UVM_Inventory::PopulateViewModelProperties()
 
 	SetInventoryItemsList(NewList);
 	SetItemsCount(InventoryItemsList.Num());
-}
-
-void UVM_Inventory::BroadcastGetterForType(EItemSlot ItemSlot)
-{
-	// TODO: maybe map EItemType -> Function Pointer/Name? 
-	switch (ItemSlot)
-	{
-	case EItemSlot::Hat:	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetHatItem);
-		break;
-	case EItemSlot::Body:	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetBodyItem);
-		break;
-	case EItemSlot::Legs:	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetLegsItem);
-		break;
-	case EItemSlot::Feet:	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetFeetItem);
-		break;
-	case EItemSlot::Wrists: UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetWristsItem);
-		break;
-		
-	default:
-		UE_LOG(LogViewModel, Warning, TEXT("BroadcastGetterForType: No specific broadcast handler for EItemSlot %s"), *UEnum::GetValueAsString(ItemSlot));
-		break;
-	}
 }
 
 void UVM_Inventory::SetSkinsForColorPalette(const TArray<USkinListItemData*>& NewSkins)
@@ -1464,38 +1401,36 @@ bool UVM_Inventory::RequestRemoveItem(FPrimaryAssetId ItemId, int32 Count)
 	return false;
 }
 
-void UVM_Inventory::FilterBySlot(const EItemSlot DesiredSlot)
+void UVM_Inventory::FilterBySlot(const FGameplayTag DesiredFilterTag)
 {
-    if (!IsValid(this))
-    {
-        UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - THIS (ViewModel) IS INVALID!"));
-        return;
-    }
+	if (!IsValid(this))
+	{
+		UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - THIS (ViewModel) IS INVALID!"));
+		return;
+	}
 
-    LastFilterType = DesiredSlot; 
+	LastFilterType = DesiredFilterTag; 
 	
-    if (OnFilterMethodChanged.IsBound())
-    {
-        UE_LOG(LogTemp, Log, TEXT("UVM_Inventory::FilterBySlot - Broadcasting OnFilterMethodChanged with type: %s"), *UEnum::GetValueAsString(DesiredSlot));
-        try
-        {
-            OnFilterMethodChanged.Broadcast(DesiredSlot);
-            UE_LOG(LogTemp, Display, TEXT("UVM_Inventory::FilterBySlot - OnFilterMethodChanged: Broadcast finished successfully."));
-        }
-        catch (const std::exception& e)
-        {
-            UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - EXCEPTION during OnFilterMethodChanged.Broadcast (std::exception: %s). FilterType: %s"), ANSI_TO_TCHAR(e.what()), *UEnum::GetValueAsString(DesiredSlot));
-        }
-        catch (...)
-        {
-            UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - UNKNOWN EXCEPTION during OnFilterMethodChanged.Broadcast. FilterType: %s"), *UEnum::GetValueAsString(DesiredSlot));
-        }
-    }
-    else
-    {
-        UE_LOG(LogTemp, Warning, TEXT("UVM_Inventory::FilterBySlot - Skipped OnFilterMethodChanged.Broadcast because IsBound was false. FilterType: %s"), *UEnum::GetValueAsString(DesiredSlot));
-    }
-	
+	if (OnFilterMethodChanged.IsBound())
+	{
+		UE_LOG(LogTemp, Log, TEXT("UVM_Inventory::FilterBySlot - Broadcasting OnFilterMethodChanged with tag: %s"), *DesiredFilterTag.ToString());
+		try
+		{
+			OnFilterMethodChanged.Broadcast(DesiredFilterTag);
+		}
+		catch (const std::exception& e)
+		{
+			UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - EXCEPTION during OnFilterMethodChanged.Broadcast (std::exception: %s). FilterTag: %s"), ANSI_TO_TCHAR(e.what()), *DesiredFilterTag.ToString());
+		}
+		catch (...)
+		{
+			UE_LOG(LogTemp, Error, TEXT("UVM_Inventory::FilterBySlot - UNKNOWN EXCEPTION during OnFilterMethodChanged.Broadcast. FilterTag: %s"), *DesiredFilterTag.ToString());
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UVM_Inventory::FilterBySlot - Skipped OnFilterMethodChanged.Broadcast because IsBound was false. FilterTag: %s"), *DesiredFilterTag.ToString());
+	}
 }
 
 void UVM_Inventory::UnbindDelegates()
@@ -1529,45 +1464,6 @@ void UVM_Inventory::TriggerPopulateViewModelProperties()
 		0.3f,
 		false
 	);
-}
-
-void UVM_Inventory::BroadcastEquippedItemChanges()
-{
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetHatItem);
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetBodyItem);
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetLegsItem);
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetFeetItem);
-	UE_MVVM_BROADCAST_FIELD_VALUE_CHANGED(GetWristsItem);
-}
-
-FInventoryEquippedItemData UVM_Inventory::GetHatItem() const
-{
-	const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(EItemSlot::Hat);
-	return FoundItem ? *FoundItem : FInventoryEquippedItemData();
-}
-
-FInventoryEquippedItemData UVM_Inventory::GetBodyItem() const
-{
-	const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(EItemSlot::Body);
-	return FoundItem ? *FoundItem : FInventoryEquippedItemData();
-}
-
-FInventoryEquippedItemData UVM_Inventory::GetLegsItem() const
-{
-	const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(EItemSlot::Legs);
-	return FoundItem ? *FoundItem : FInventoryEquippedItemData();
-}
-
-FInventoryEquippedItemData UVM_Inventory::GetFeetItem() const
-{
-	const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(EItemSlot::Feet);
-	return FoundItem ? *FoundItem : FInventoryEquippedItemData();
-}
-
-FInventoryEquippedItemData UVM_Inventory::GetWristsItem() const
-{
-	const FInventoryEquippedItemData* FoundItem = EquippedItemsMap.Find(EItemSlot::Wrists);
-	return FoundItem ? *FoundItem : FInventoryEquippedItemData();
 }
 
 void UVM_Inventory::SetIsLoading(bool bNewLoadingState)

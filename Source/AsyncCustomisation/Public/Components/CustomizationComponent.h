@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AsyncCustomisation/Public/Utilities/CounterComponent.h"
 #include "AsyncCustomisation/Public/Utilities/TimerComponent.h"
+#include "Constants/GlobalConstants.h"
 #include "Core/CharacterComponentBase.h"
 #include "Core/CustomizationTypes.h"
 
@@ -10,13 +11,14 @@
 
 #include "CustomizationComponent.generated.h"
 
+struct FGameplayTag;
 class UCustomizationDataAsset;
 struct FBodyPartVariant;
 class UCustomizationAssetManager;
 class USomatotypeDataAsset;
+class USlotMappingAsset;
 DECLARE_LOG_CATEGORY_EXTERN(LogCustomizationComponent, Log, All);
 
-enum class EItemSlot : uint8;
 class UBodyPartAsset;
 class UMaterialCustomizationDataAsset;
 class UMaterialPackCustomizationDA;
@@ -26,12 +28,13 @@ struct FAttachedActorChanges
 	TMap<FName, TArray<TWeakObjectPtr<AActor>>> ActorsToDestroy;
 	TArray<FPrimaryAssetId> AssetIdsToLoad;
 	TMap<FPrimaryAssetId, FName> AssetIdToSlugMapForLoad;
-	TMap<FName, ECustomizationSlotType> SlugToSlotMapForLoad;
+	TMap<FName, FGameplayTag> SlugToSlotMapForLoad;
 };
 struct FResolvedVariantInfo
 {
-    TMap<EBodyPartType, FName> FinalSlotAssignment; 
-    TMap<FName, const FBodyPartVariant*> SlugToResolvedVariantMap; 
+    TMap<FGameplayTag, FName> FinalSlotAssignment; 
+    TMap<FName, const FBodyPartVariant*> SlugToResolvedVariantMap;
+	TMap<FName, FGameplayTag> SlugToSlotTagMap;
     TArray<FName> InitialSlugsInTargetState;
 };
 
@@ -57,7 +60,7 @@ public:
 	void EquipItem(const FName& ItemSlug);
 	void EquipItems(const TArray<FName>& Items);
 	void UnequipItem(const FName& ItemSlug);
-	bool RequestUnequipSlot(ECustomizationSlotType InSlotToUnequip);
+	bool RequestUnequipSlot(const FGameplayTag& InSlotToUnequip);
 	
 	void ResetAll();
 	void HardRefreshAll();
@@ -67,8 +70,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Customization")
 	const FCustomizationContextData& GetCurrentCustomizationState();
 
-	const TMap<EBodyPartType, USkeletalMeshComponent*>& GetSkeletals();
-
+	const TMap<FGameplayTag, TObjectPtr<USkeletalMeshComponent>>& GetSpawnedMeshComponents();
+	
+	// public just cz customization utilities TODO:: fix 
+	USkeletalMeshComponent* CreateOrGetMeshComponentForSlot(const FGameplayTag& SlotTag);
+	
 	void SetAttachedActorsSimulatePhysics(bool bSimulatePhysics);
 	
 	DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnEquippedItemsChanged, const FCustomizationContextData&, NewState);
@@ -106,13 +112,13 @@ protected:
 	void CreateTimerIfNeeded();
 
 	// Helpers
+
 	FAttachedActorChanges DetermineAttachedActorChanges(const FCustomizationContextData& CurrentState, const FCustomizationContextData& TargetState);
 	void DestroyAttachedActors(const TMap<FName, TArray<TWeakObjectPtr<AActor>>>& ActorsToDestroy);
-	void ResetUnusedBodyParts(const FCustomizationContextData& TargetState, const TSet<EBodyPartType>& FinalUsedPartTypes);
+	void ResetUnusedBodyParts(const TSet<FGameplayTag>& FinalUsedSlotTags);
 	void SpawnAndAttachActorsForItem(
 		UCustomizationDataAsset* DataAsset,
 		FName ItemSlug,
-		const TMap<EBodyPartType, USkeletalMeshComponent*>& CharacterSkeletals,
 		ABaseCharacter* CharOwner,
 		UWorld* WorldContext,
 		TArray<TWeakObjectPtr<AActor>>& OutSpawnedActorPtrs,
@@ -126,7 +132,7 @@ protected:
 	void RebuildEquippedBodyPartsState(
 		FCustomizationContextData& TargetStateToModify,
 		const FResolvedVariantInfo& ResolvedVariantData,
-		TSet<EBodyPartType>& OutFinalUsedPartTypes,
+		TSet<FGameplayTag>& OutFinalUsedSlotTags,
 		TArray<FName>& OutFinalActiveSlugs);
 
 	FResolvedVariantInfo ResolveBodyPartVariantsAndInitialAssignments(
@@ -137,19 +143,16 @@ protected:
 	void ApplyBodyPartMeshesAndSkin(
 		FCustomizationContextData& TargetStateContext,
 		USomatotypeDataAsset* LoadedSomatotypeDataAsset,
-		TSet<EBodyPartType>& FinalUsedPartTypes,
+		TSet<FGameplayTag>& FinalUsedSlotTags,
 		const TArray<FName>& FinalActiveSlugs,
 		const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap);
 
 	void UpdateMaterialsForBodyPartChanges(FCustomizationContextData& TargetStateToModify, const FResolvedVariantInfo& ResolvedVariantData);
 
 	void ApplyBodySkin(const FCustomizationContextData& TargetState,
-	                   const USomatotypeDataAsset* SomatotypeDataAsset,
-	                   TSet<EBodyPartType>& FinalUsedPartTypes,
-	                   TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap);
-	
-	void ApplyMaterialToBodyMesh(ESomatotype Somatotype,
-								 USkeletalMeshComponent* BodySkinMeshComp);
+					   const USomatotypeDataAsset* SomatotypeDataAsset,
+					   TSet<FGameplayTag>& FinalUsedSlotTags,
+					   TMap<FName, const FBodyPartVariant*> FinalSlugToVariantMap);
 	
 	void ProcessBodyParts(FCustomizationContextData& TargetStateToModify,
 	                             USomatotypeDataAsset* LoadedSomatotypeDataAsset,
@@ -173,13 +176,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Settings")
 	bool OnlyOneItemInSlot = false;
 
-	UPROPERTY()
-	TMap<EBodyPartType, USkeletalMeshComponent*> Skeletals;
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, TObjectPtr<USkeletalMeshComponent>> SpawnedMeshComponents;
 	
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	
 	FCounterComponent PendingInvalidationCounter;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Customization|Settings")
+	TSoftObjectPtr<USlotMappingAsset> SlotMappingAsset;
 private:
 	struct FCustomizationDebugInfo
 	{
@@ -211,23 +217,22 @@ private:
 			BlockText += "-------------------";
 			return BlockText;
 		}
-
-		static FString FormatData(const TMap<FName, EBodyPartType>& Items)
+		static FString FormatData(const TMap<FGameplayTag, FName>& Items)
 		{
 			FString FormattedText;
 			for (const auto& Pair : Items)
 			{
-				FormattedText += FString::Printf(TEXT("%s : %s\n"), *Pair.Key.ToString(), *UEnum::GetValueAsString(Pair.Value));
+				FormattedText += FString::Printf(TEXT("%s : %s\n"), *Pair.Key.ToString(), *Pair.Value.ToString());
 			}
 			return FormattedText;
 		}
 
-		static FString FormatData(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Items)
+		static FString FormatData(const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& Items)
 		{
 			FString FormattedText;
 			for (const auto& Pair : Items)
 			{
-				FormattedText += FString::Printf(TEXT("%s : %s\n"), *UEnum::GetValueAsString(Pair.Key), *Pair.Value.ToString());
+				FormattedText += FString::Printf(TEXT("%s : %s\n"), *Pair.Key.ToString(), *Pair.Value.ToString());
 			}
 			return FormattedText;
 		}
@@ -251,6 +256,16 @@ private:
 	FCustomizationDebugInfo DebugInfo;
 	FTimerHandle TimerHandle;
 
+	void AddItemToTargetState(const FName& ItemSlug, FCustomizationContextData& InOutTargetState);
+
+	UPROPERTY()
+	TObjectPtr<USlotMappingAsset> LoadedSlotMapping = nullptr;
+	
+	UPROPERTY()
+	TMap<FName, FGameplayTag> SlugToSlotTagCache;
+	
+	void LoadSlotMappingAndExecute(TFunction<void()> OnComplete);
+	
 	void UpdateDebugInfo();
 	void DrawDebugTextBlock(const FVector& Location, const FString& Text, AActor* OwningActor, const FColor& Color);
 };

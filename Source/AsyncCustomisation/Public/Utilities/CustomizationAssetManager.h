@@ -6,6 +6,7 @@
 #include "Utilities/Cache.h"
 #include "CustomizationAssetManager.generated.h"
 
+struct FGameplayTag;
 class UVictoryStanceAnimAsset;
 class UFatalityAnimAsset;
 class UAbilityMetaAsset;
@@ -24,12 +25,12 @@ class ASYNCCUSTOMISATION_API UCustomizationAssetManager : public UAssetManager
 public:
 
 	DECLARE_DELEGATE_OneParam(FOnBodyPartLoaded, UBodyPartAsset* /*InBodyPart*/)
-		DECLARE_DELEGATE_OneParam(FOnBodyPartListLoaded, TArray<UBodyPartAsset*>& /*InBodyPartList*/);
+	DECLARE_DELEGATE_OneParam(FOnBodyPartListLoaded, TArray<UBodyPartAsset*>& /*InBodyPartList*/);
 	DECLARE_DELEGATE_OneParam(FOnMaterialPackLoaded, UMaterialPackCustomizationDA* /*InOnMaterialPack*/)
-		DECLARE_DELEGATE_OneParam(FOnCustomizationLoaded, UCustomizationDataAsset* /*InCustomization*/)
-			DECLARE_DELEGATE_OneParam(FOnMaterialCustomizationLoaded, UMaterialCustomizationDataAsset* /*InMaterialCustomization*/)
+	DECLARE_DELEGATE_OneParam(FOnCustomizationLoaded, UCustomizationDataAsset* /*InCustomization*/)
+	DECLARE_DELEGATE_OneParam(FOnMaterialCustomizationLoaded, UMaterialCustomizationDataAsset* /*InMaterialCustomization*/)
 
-	public : UFUNCTION(BlueprintCallable, BlueprintPure)
+	UFUNCTION(BlueprintCallable, BlueprintPure)
 	static UCustomizationAssetManager* GetCustomizationAssetManager();
 
 

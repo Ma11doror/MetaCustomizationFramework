@@ -49,12 +49,18 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	EItemTier Tier = EItemTier::Common;
 
-	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
-	EItemSlot ItemSlot = EItemSlot::None; 
+	/** The specific technical slot this item occupies. e.g., 'Slot.Item.Cloak' */
+	UPROPERTY(BlueprintReadOnly, Category="Inventory Item") 
+	FGameplayTag ItemSlotTag;
+
+	/** The UI category this item belongs to. e.g., 'Slot.UI.Back' */
+	UPROPERTY(BlueprintReadOnly, Category="Inventory Item") 
+	FGameplayTag UISlotCategoryTag;
 
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	EItemType ItemType = EItemType::None;
-	
+
+	// TODO:: Make private back
 	UPROPERTY(BlueprintReadOnly, Category="Inventory Item")
 	bool IsEquipped = false;
 
@@ -68,10 +74,10 @@ public:
 		Description = MetaAsset->Description;
 		Icon = MetaAsset->Icon;
 		Tier = MetaAsset->ItemTier;
-		ItemSlot = MetaAsset->ItemSlot;
+		ItemSlotTag = MetaAsset->UISlotCategoryTag;
 		ItemType = MetaAsset->ItemType;
 		
-		IsEquipped = bIsCurrentlyEquipped;
+		SetIsEquipped(bIsCurrentlyEquipped);
 	}
 
 	bool operator==(const UBaseListItemData& Other) const
@@ -115,7 +121,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "Inventory Item")
 	bool HasSkins;
 	
-	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(EItemSlot)> /*WidgetHandler*/)>;
+	using SubscribeFuncType = TFunction<FDelegateHandle(UObject* /*SubscriberWidget*/, TFunction<void(FGameplayTag)> /*WidgetHandler*/)>;
 	using UnsubscribeFuncType = TFunction<void(FDelegateHandle)>;
 
 	void SetEventSubscriptionFunctions(SubscribeFuncType InSubscribeFunc, UnsubscribeFuncType InUnsubscribeFunc)
@@ -124,7 +130,7 @@ public:
 		UnsubscribeFunction = MoveTemp(InUnsubscribeFunc);
 	}
 	
-	FDelegateHandle SubscribeToFilterChanges(UObject* SubscriberWidget, TFunction<void(EItemSlot)> WidgetHandler)
+	FDelegateHandle SubscribeToFilterChanges(UObject* SubscriberWidget, TFunction<void(FGameplayTag)> WidgetHandler)
 	{
 		if (SubscribeFunction)
 		{

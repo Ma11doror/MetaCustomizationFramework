@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "CommonButtonBase.h"
+#include "GameplayTagContainer.h"
 #include "Components/CustomizationComponent.h"
 #include "ItemSlotWidget.generated.h"
 
@@ -22,9 +23,9 @@ public:
     UFUNCTION(BlueprintCallable)
     void SetSlotData(const FInventoryEquippedItemData& InData);
 
-    EItemSlot GetSlotType() const
+    FGameplayTag GetItemTag() const
     {
-        return ItemType;
+        return AssignedUITag;
     }
 
 protected:
@@ -61,8 +62,8 @@ protected:
 
     void SetDefaults();
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory")
-    EItemSlot ItemType = EItemSlot::None;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (GameplayTagFilter = "Slot.UI"))
+    FGameplayTag AssignedUITag;
     
 };
 

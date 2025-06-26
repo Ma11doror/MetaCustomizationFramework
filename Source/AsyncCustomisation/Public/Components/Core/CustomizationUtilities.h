@@ -7,7 +7,6 @@
 #include "Assets/MaterialCustomizationDataAsset.h"
 #include "Assets/MaterialPackCustomizationDA.h"
 #include "AsyncCustomisation/Public/Constants/GlobalConstants.h"
-#include "Utilities/CustomizationAssetManager.h"
 #include "Utilities/MetaGameLib.h"
 #include "Utilities/DataTable/DataTableLibraryTypes.h"
 
@@ -89,10 +88,10 @@ namespace CustomizationUtilities
 
 	static void SetBodyPartSkeletalMesh(UCustomizationComponent* Self,
 	                                    USkeletalMesh* SourceSkeletalMesh,
-	                                    const EBodyPartType TargetBodyPartType);
+	                                    const FGameplayTag& TargetSlotTag);
 	
 	static void SetSkeletalMesh(UCustomizationComponent* Self,
 								USkeletalMesh* SourceSkeletalMesh,
 								USkeletalMeshComponent* TargetSkeletalMeshComponent,
-								const EBodyPartType TargetBodyPartType);
+								const FGameplayTag& TargetSlotTag);
 }

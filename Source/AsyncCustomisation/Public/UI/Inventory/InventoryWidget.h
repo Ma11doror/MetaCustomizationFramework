@@ -44,8 +44,7 @@ public:
     
     virtual void NativeDestruct() override;
 
-    virtual void NativeOnInitialized() override;
-
+    virtual void NativeConstruct() override;
     virtual void NativeOnActivated() override;
     virtual void NativeOnDeactivated() override;
     
@@ -62,6 +61,9 @@ public:
     
    // UPROPERTY(BlueprintReadWrite, Category="Inventory|Actions")
     FOnRequestColorPalette OnRequestColorPalette;
+
+    UFUNCTION(BlueprintImplementableEvent)
+    UVM_Inventory* GetInventoryViewModel();
 
 protected:
     UFUNCTION()
@@ -92,9 +94,6 @@ protected:
 
     void OnPaletteItemClicked(UObject* Item);
 
-    UPROPERTY()
-    APlayerControllerBase* PlayerController;
-
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (BindWidget))
     TObjectPtr<UCommonAnimatedSwitcher> InventorySwitcher = nullptr;
 
@@ -107,6 +106,10 @@ protected:
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Inventory", meta = (BindWidget))
     TObjectPtr<UCommonListView> ItemsList = nullptr;
 
+    /*
+     * Unfortunately we have to declare VM variables in Blueprints and cpp cz of bug of "UMG Viewmodel" plugin.
+     * So we set it from blueprint VM with BlueprintImplementableEvent
+     */
     UPROPERTY(VisibleAnywhere, BlueprintReadWrite, Category="MVVM")
     TObjectPtr<UVM_Inventory> InventoryViewModel = nullptr;
 

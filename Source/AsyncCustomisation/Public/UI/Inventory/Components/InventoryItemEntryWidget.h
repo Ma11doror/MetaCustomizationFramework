@@ -19,7 +19,7 @@ class ASYNCCUSTOMISATION_API UInventoryItemEntryWidget : public UCommonButtonBas
 public:
 	
 	UFUNCTION(BlueprintImplementableEvent)
-	void HandleFilterChanged(EItemSlot InFilterType);
+	void HandleFilterChanged(FGameplayTag InFilterType);
 	virtual void SetPaletteRequestHandler(const FOnRequestColorPalette& InDelegate) override;
 	
 protected:

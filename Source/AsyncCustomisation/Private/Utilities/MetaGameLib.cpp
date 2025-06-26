@@ -1,9 +1,22 @@
 #include "Utilities/MetaGameLib.h"
 
+#include "GameplayTagContainer.h"
 #include "Components/Core/Somatotypes.h"
 #include "Constants/GlobalConstants.h"
 #include "UI/VM_Inventory.h"
 #include "Utilities/DataTable/DataTableLibraryTypes.h"
+
+/**
+ * @brief Generates the function definition for an equipped map converter.
+ * @param FuncName The name of the function (must match the one in DECLARE_EQUIPPED_MAP_CONVERTER).
+ * @param SlotTagString The string representation of the GameplayTag to search for (e.g., "Slot.UI.Hat").
+ */
+#define DEFINE_EQUIPPED_MAP_CONVERTER(FuncName, SlotTagString) \
+FInventoryEquippedItemData UMetaGameLib::FuncName(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap) \
+{ \
+return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName(SlotTagString))); \
+}
+#undef DEFINE_EQUIPPED_MAP_CONVERTER
 
 FPrimaryAssetId UMetaGameLib::GetDefaultSkinAssetIdBySomatotype(const ESomatotype InType)
 {
@@ -47,38 +60,68 @@ UDataTable* UMetaGameLib::GetDataTableFromLibrary(EDataTableLibraryType InType)
 	return Result;
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapToSlot(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap, const EItemSlot& InType)
+FInventoryEquippedItemData UMetaGameLib::GetItemFromEquippedMapByTagInternal(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap, const FGameplayTag& SlotTag)
 {
-	auto Item = InMap.Find(InType);
+	const FInventoryEquippedItemData* Item = InMap.Find(SlotTag);
 	return Item ? *Item : FInventoryEquippedItemData();
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHatSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHat(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemSlot::Hat);
-	return Item ? *Item : FInventoryEquippedItemData();
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Hat")));
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBodySlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapTorso(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemSlot::Body);
-	return Item ? *Item : FInventoryEquippedItemData();
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Torso")));
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapGlovesSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapWrists(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemSlot::Wrists);
-	return Item ? *Item : FInventoryEquippedItemData();
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Wrists")));
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedPantsPantsSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapLegs(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemSlot::Legs);
-	return Item ? *Item : FInventoryEquippedItemData();
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Legs")));
 }
 
-FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapFeetSlotItem(const TMap<EItemSlot, FInventoryEquippedItemData>& InMap)
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapFeet(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
 {
-	auto Item = InMap.Find(EItemSlot::Feet);
-	return Item ? *Item : FInventoryEquippedItemData();
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Feet")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapAccessory(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Accessory")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBack(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Back")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapHead(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+    return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Head")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapSkin(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+    return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Skin")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapBandana(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Bandana")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapScarf(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Scarf")));
+}
+
+FInventoryEquippedItemData UMetaGameLib::ConvertEquippedMapCloak(const TMap<FGameplayTag, FInventoryEquippedItemData>& InMap)
+{
+	return GetItemFromEquippedMapByTagInternal(InMap, FGameplayTag::RequestGameplayTag(FName("Slot.UI.Cloak")));
 }

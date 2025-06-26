@@ -20,5 +20,5 @@ namespace GLOBAL_CONSTANTS
 	inline const FName PrimaryBodyPartAssetType = FName(TEXT("BodyPartAsset"));
 	
 	inline const FName CustomizationTag = FName(TEXT("Customization"));
-	
+	const FName BodySkinSlotTagName = FName("Slot.Item.BodySkin");
 } // namespace GLOBAL_CONSTANTS

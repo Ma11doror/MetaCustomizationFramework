@@ -7,6 +7,7 @@
 #include "Components/Core/CustomizationTypes.h"
 #include "VM_Inventory.generated.h"
 
+struct FGameplayTag;
 class USkinListItemData;
 class UInventoryListItemData;
 struct FInventoryEquippedItemData;
@@ -61,15 +62,31 @@ struct FPendingMetaRequest
     }
 };
 
-inline bool operator==(const TMap<EItemSlot, FInventoryEquippedItemData>& Lhs, const TMap<EItemSlot, FInventoryEquippedItemData>& Rhs)
+inline bool operator==(const TMap<FGameplayTag, FInventoryEquippedItemData>& Lhs, const TMap<FGameplayTag, FInventoryEquippedItemData>& Rhs)
 {
-    if (Lhs.Num() != Rhs.Num()) return false;
+    if (Lhs.Num() != Rhs.Num())
+    {
+        return false;
+    }
+    
     for (const auto& Pair : Lhs)
     {
-        const FInventoryEquippedItemData* BValue = Rhs.Find(Pair.Key);
-        if (!BValue || !(Pair.Value == *BValue)) return false;
+        const FGameplayTag& Key = Pair.Key;
+        const FInventoryEquippedItemData& LhsValue = Pair.Value;
+        
+        const FInventoryEquippedItemData* RhsValuePtr = Rhs.Find(Key);
+        
+        if (!RhsValuePtr || !(LhsValue == *RhsValuePtr))
+        {
+            return false;
+        }
     }
     return true;
+}
+
+inline bool operator!=(const TMap<FGameplayTag, FInventoryEquippedItemData>& Lhs, const TMap<FGameplayTag, FInventoryEquippedItemData>& Rhs)
+{
+    return !(Lhs == Rhs);
 }
 
 inline bool operator==(const TMap<FPrimaryAssetId, int32>& LHS, const TMap<FPrimaryAssetId, int32>& RHS)
@@ -114,15 +131,19 @@ public:
     UFUNCTION(BlueprintPure, FieldNotify, Category = "Inventory|UI Helper")
     TArray<UObject*> GetInventoryItemsAsObjects() const;
     
-    void FilterBySlot(EItemSlot DesiredSlot);
+    void FilterBySlot(FGameplayTag DesiredFilterTag);
     
-    DECLARE_MULTICAST_DELEGATE_OneParam(FOnFilterMethodChanged, EItemSlot /* InItemType */ );
+    DECLARE_MULTICAST_DELEGATE_OneParam(FOnFilterMethodChanged, FGameplayTag /* InItemType */ );
     FOnFilterMethodChanged OnFilterMethodChanged;
 
-    EItemSlot GetFilterType() const;
+    FGameplayTag GetFilterType() const;
 
     UFUNCTION(BlueprintPure, Category = "ViewModel|State")
     FName GetItemSlugForColorPalette() const;
+    
+    UFUNCTION(BlueprintPure, Category="MVVM|Inventory")
+    FInventoryEquippedItemData GetEquippedItemForSlot(FGameplayTag SlotTag);
+    
 
 protected:
     UFUNCTION(BlueprintCallable, Category = "ViewModel")
@@ -132,7 +153,7 @@ protected:
     TArray<TObjectPtr<UInventoryListItemData>> InventoryItemsList;
 
     UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|Inventory")
-    TMap<EItemSlot, FInventoryEquippedItemData> EquippedItemsMap;
+    TMap<FGameplayTag, FInventoryEquippedItemData> EquippedItemsMap;
 
     UPROPERTY(BlueprintReadWrite, FieldNotify, Setter, Category = "ViewModel|State")
     bool bIsLoading = false;
@@ -150,13 +171,13 @@ protected:
     void OnEntryItemClicked(const FName& InItemSlug);
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
-    void RequestUnequipSlot(ECustomizationSlotType SlotToUnequip);
+    void RequestUnequipSlot(FGameplayTag SlotToUnequip);
 
     UFUNCTION(BlueprintCallable, Category = "ViewModel|Actions")
     void RequestDropItem(FPrimaryAssetId ItemIdToDrop, int32 CountToDrop = 1);
 
     void SetInventoryItemsList(const TArray<TObjectPtr<UInventoryListItemData>>& InNewList);
-    void SetEquippedItemsMap(const TMap<EItemSlot, FInventoryEquippedItemData>& NewMap);
+    void SetEquippedItemsMap(const TMap<FGameplayTag, FInventoryEquippedItemData>& NewMap);
     void SetItemsCount(const int32 NewCount);
     void SetIsLoading(bool bNewLoadingState);
 
@@ -183,7 +204,7 @@ protected:
     void LoadRequiredMetaData(const TArray<FPrimaryAssetId>& MetaAssetIdsToLoad);
     void OnMetaDataLoaded();
     void PopulateViewModelProperties();
-    void BroadcastGetterForType(EItemSlot ItemSlot);
+    void BroadcastGetterForType(FGameplayTag ItemSlot);
 
   
     UPROPERTY(Transient)
@@ -231,26 +252,6 @@ private:
     UPROPERTY(BlueprintReadWrite, EditAnywhere, FieldNotify, Setter, Category = "ViewModel|Inventory", meta = (AllowPrivateAccess))
     int32 ItemsCount;
 
-    EItemSlot LastFilterType = EItemSlot::None;
-    
-    void BroadcastEquippedItemChanges();
-
-
-    /*
-     *  Hardcoded each slot for now. TODO:: think about template or marco for generate functions for each slot
-     */
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetHatItem() const;
-
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetBodyItem() const;
-
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetLegsItem() const;
-    
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetFeetItem() const;
-    
-    UFUNCTION(BlueprintPure, FieldNotify, Category="MVVM|Inventory")
-    FInventoryEquippedItemData GetWristsItem() const;
+    // EItemSlot LastFilterType = EItemSlot::None;
+    FGameplayTag LastFilterType = FGameplayTag{};
 };

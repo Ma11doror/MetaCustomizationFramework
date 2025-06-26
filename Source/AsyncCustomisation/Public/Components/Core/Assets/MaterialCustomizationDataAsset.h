@@ -25,14 +25,21 @@ public:
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "MaterialCustomization")
 	bool bApplyOnBodyPart = true;
 
-	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "MaterialCustomization",
-		meta = (EditCondition = "bApplyOnBodyPart", EditConditionHides))
-	EBodyPartType BodyPartType = EBodyPartType::None;
+	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "MaterialCustomization", meta = (AssetRegistrySearchable, EditCondition = "bApplyOnBodyPart", EditConditionHides, GameplayTagFilter="Slot.Item"))
+	FGameplayTag TargetItemSlot;
 
 	UPROPERTY(BlueprintReadWrite, EditAnywhere, Category = "MaterialCustomization",
 		meta = (EditCondition = "!bApplyOnBodyPart", EditConditionHides))
 	FName SocketName;
 
+#if WITH_EDITOR
+	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override
+	{
+		Super::GetAssetRegistryTags(OutTags);
+		OutTags.Add(FAssetRegistryTag("TargetItemSlot", TargetItemSlot.ToString(), FAssetRegistryTag::ETagType::TT_Alphabetical));
+	}
+#endif
+	
 	FPrimaryAssetId GetPrimaryAssetId() const override
 	{
 		return FPrimaryAssetId(GLOBAL_CONSTANTS::PrimaryMaterialCustomizationAssetType, GetFName());

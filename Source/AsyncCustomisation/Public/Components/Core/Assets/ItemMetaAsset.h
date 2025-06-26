@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "CoreMinimal.h"
+#include "GameplayTagContainer.h"
 #include "AsyncCustomisation/Public/Constants/GlobalConstants.h"
 #include "AsyncCustomisation/Public/Components/Core/Data.h"
 #include "Engine/DataAsset.h"
@@ -25,9 +26,13 @@ public:
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, meta = (MultiLine = true))
 	FText Description;
 	
-	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable)) 
-	EItemSlot ItemSlot = EItemSlot::None;
-
+	// UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable)) 
+	// EItemSlot ItemSlot = EItemSlot::None;
+	
+	/** The UI category this item belongs to. e.g., 'Slot.UI.Back' */
+	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable, GameplayTagFilter="Slot.UI")) 
+	FGameplayTag UISlotCategoryTag;
+	
 	UPROPERTY(BlueprintReadOnly, EditAnywhere, Category="Classification", meta=(AssetRegistrySearchable)) 
 	EItemType ItemType = EItemType::Clothing;
 
@@ -35,7 +40,7 @@ public:
 	EItemTier ItemTier = EItemTier::Common;
 
 	// NOTE: ReadWrite only for Editor Utilities
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, AssetRegistrySearchable)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta=(AssetRegistrySearchable))
 	FPrimaryAssetId CustomizationAssetId;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Customization", meta = (EditCondition = "bSupportsSkins"))
@@ -53,6 +58,17 @@ public:
 	TArray<FPrimaryAssetId> AvailableSkinAssetIds;
 	
 #if WITH_EDITOR
+	
+	virtual void GetAssetRegistryTags(TArray<FAssetRegistryTag>& OutTags) const override
+	{
+		Super::GetAssetRegistryTags(OutTags);
+
+		// Manually add tags for properties that need to be queried from the asset registry.
+		OutTags.Add(FAssetRegistryTag("ItemType", UEnum::GetValueAsString(ItemType), FAssetRegistryTag::ETagType::TT_Alphabetical));
+		OutTags.Add(FAssetRegistryTag("UISlotCategoryTag", UISlotCategoryTag.ToString(), FAssetRegistryTag::ETagType::TT_Alphabetical));
+		OutTags.Add(FAssetRegistryTag("CustomizationAssetId", CustomizationAssetId.ToString(), FAssetRegistryTag::TT_Alphabetical));
+	}
+	
 	virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override
 	{
 		Super::PostEditChangeProperty(PropertyChangedEvent);

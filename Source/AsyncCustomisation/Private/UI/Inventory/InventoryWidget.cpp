@@ -16,13 +16,13 @@ void UInventoryWidget::NativeDestruct()
     Super::NativeDestruct();
 }
 
-void UInventoryWidget::NativeOnInitialized()
+void UInventoryWidget::NativeConstruct()
 {
-    Super::NativeOnInitialized();
-
-    PlayerController = GetOwningPlayer<APlayerControllerBase>();
-    InventoryViewModel = PlayerController->GetInventoryViewModel();
+    Super::NativeConstruct();
+    
+    InventoryViewModel = GetInventoryViewModel();
     ensureAlways(InventoryViewModel);
+
 }
 
 void UInventoryWidget::NativeOnActivated()
@@ -72,16 +72,25 @@ void UInventoryWidget::OnItemSlotClicked(UCommonButtonBase* AssociatedButton, in
     ensureAlwaysMsgf(InventorySwitcher, TEXT("UInventoryWidget::OnItemSlotClicked: InventorySwitcher is null!"));
     
     SetActiveInventoryTab(EInventorySwitcherTab::ItemsListView);
-    InventorySwitcher->OnTransitioningChanged.AddWeakLambda(this, [this, SlotButton, InModel = InventoryViewModel](const bool IsTransitioning)
+    
+    const FGameplayTag& SlotCategoryTag = SlotButton->GetItemTag();
+    if (!SlotCategoryTag.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("UInventoryWidget::OnItemSlotClicked: Clicked slot button with invalid AssignedUITag."));
+        return;
+    }
+    
+    InventorySwitcher->OnTransitioningChanged.AddWeakLambda(this, [this, SlotCategoryTag, InModel = InventoryViewModel](const bool IsTransitioning)
     {
         if (IsTransitioning) return;
 
-        if (!IsValid(InModel) || !IsValid(SlotButton) || !IsValid(this))
+        if (!IsValid(InModel) || !IsValid(this))
         {
             UE_LOG(LogTemp, Warning, TEXT("UInventoryWidget::OnItemSlotClicked - InventorySwitcher transition finished, but some captured objects are invalid."));
+            return;
         }
-            
-        InModel->FilterBySlot(SlotButton->GetSlotType());
+        
+        InModel->FilterBySlot(SlotCategoryTag);
         OnListTabOpened();
            
         if (IsValid(InventorySwitcher)) 
@@ -148,7 +157,7 @@ void UInventoryWidget::OnBackButtonClicked()
          * all items are initially hidden when a new items tab is subsequently opened,
          * preventing the "ghosting" of previous tab's items before the new filter is applied.
          */
-        InventoryViewModel->FilterBySlot(EItemSlot::None);
+        InventoryViewModel->FilterBySlot(FGameplayTag{});
     }
     /*switch (static_cast<EInventorySwitcherTab>(InventorySwitcher->GetActiveWidgetIndex()))
     {

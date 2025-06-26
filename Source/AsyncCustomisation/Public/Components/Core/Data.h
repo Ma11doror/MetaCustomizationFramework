@@ -16,31 +16,31 @@ enum class EItemTier : uint8
 };
 
 ENUM_RANGE_BY_FIRST_AND_LAST(EItemTier, EItemTier::None, EItemTier::Royal)
+//
+// UENUM(BlueprintType)
+// enum class EItemSlot : uint8
+// {
+// 	None = 0,
+//
+// 	Body,
+// 	Hat,
+// 	Head,
+// 	Feet,
+// 	Hands,
+// 	Wrists,
+// 	Legs,
+// 	Beard,
+// 	Ring,
+// 	Skin,
+// 	Haircut,
+// 	Bandan,
+// 	Chain,
+// 	FaceAccessory,
+// 	Backpack,
+// 	Cloak,
+// };
 
-UENUM(BlueprintType)
-enum class EItemSlot : uint8
-{
-	None = 0,
-
-	Body,
-	Hat,
-	Head,
-	Feet,
-	Hands,
-	Wrists,
-	Legs,
-	Beard,
-	Ring,
-	Skin,
-	Haircut,
-	Bandan,
-	Chain,
-	FaceAccessory,
-	Backpack,
-	Cloak,
-};
-
-ENUM_RANGE_BY_FIRST_AND_LAST(EItemSlot, EItemSlot::Body, EItemSlot::Chain)
+//ENUM_RANGE_BY_FIRST_AND_LAST(EItemSlot, EItemSlot::Body, EItemSlot::Chain)
 
 UENUM(BlueprintType)
 enum class EItemType : uint8

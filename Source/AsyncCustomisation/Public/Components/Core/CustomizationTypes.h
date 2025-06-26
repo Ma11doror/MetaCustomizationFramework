@@ -3,6 +3,8 @@
 #include "BodyPartTypes.h"
 //#include "Utilities/CommonUtilities.h"
 #include "CustomizationSlotTypes.h"
+#include "Data.h"
+#include "GameplayTagContainer.h"
 #include "Somatotypes.h"
 #include "UObject/StrongObjectPtr.h"
 #include "CustomizationTypes.generated.h"
@@ -64,10 +66,11 @@ struct FEquippedItemActorsInfo
 	}
 };
 
-bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS);
-bool operator!=(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS);
-bool operator==(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
-bool operator!=(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& Map, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS);
+bool operator==(const TMap<FGameplayTag, FName>& LHS, const TMap<FGameplayTag, FName>& RHS);
+bool operator!=(const TMap<FGameplayTag, FName>& LHS, const TMap<FGameplayTag, FName>& RHS);
+
+bool operator==(const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& LHS, const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& RHS);
+bool operator!=(const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& LHS, const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& RHS);
 
 USTRUCT()
 struct FEquippedItemsInSlotInfo
@@ -145,13 +148,17 @@ public:
 	ESomatotype Somatotype = ESomatotype::None;
 	
 	//[Materials by slot] <Slug, BodyTartType>
-	TMap<FName, EBodyPartType> EquippedMaterialsMap{};
+	UPROPERTY(BlueprintReadOnly, Category = "Customization")
+	TMap<FGameplayTag, FName> EquippedMaterialsMap;
+	// TMap<FName, EBodyPartType> EquippedMaterialsMap{};
 	
 	//[Body] Mapping item slug on BodyPartType
-	TMap<FName, EBodyPartType> EquippedBodyPartsItems = {};
+	UPROPERTY(BlueprintReadOnly, Category = "Customization")
+	TMap<FGameplayTag, FName> EquippedBodyPartsItems;
+	// TMap<FName, EBodyPartType> EquippedBodyPartsItems = {};
 	
 	//[Actors] Mapping SlotType on item id and Attached actors
-	TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo> EquippedCustomizationItemActors = {};
+	TMap<FGameplayTag, FEquippedItemsInSlotInfo> EquippedCustomizationItemActors = {};
 	
 	//Skin visibility flag list
 	FSkinFlagCombination SkinVisibilityFlags;
@@ -164,7 +171,7 @@ public:
 		UE_LOG(LogTemp, Warning, TEXT("FCustomizationContextData::ClearAttachedActors - Clearing %d slots."), EquippedCustomizationItemActors.Num());
 		for (auto& SlotPair : EquippedCustomizationItemActors)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("FCustomizationContextData::ClearAttachedActors - Clearing slot %s."), *UEnum::GetValueAsString(SlotPair.Key));
+			UE_LOG(LogTemp, Warning, TEXT("FCustomizationContextData::ClearAttachedActors - Clearing slot %s."), *SlotPair.Key.ToString());
 			SlotPair.Value.Clear();
 		}
 
@@ -174,22 +181,18 @@ public:
 	TArray<FName> GetEquippedSlugs() const
 	{
 		TArray<FName> Slugs;
-
-		// Add material slugs from EquippedMaterialsMap
-		for (const auto& [MaterialSlug, BodyPartType] : EquippedMaterialsMap)
+		for (const auto& Pair : EquippedMaterialsMap)
 		{
-			Slugs.Add(MaterialSlug);
+			Slugs.Add(Pair.Value);
 		}
-
-		// Add body part slugs
+		
 		TArray<FName> ItemBodyPartSlugs;
-		EquippedBodyPartsItems.GenerateKeyArray(ItemBodyPartSlugs);
+		EquippedBodyPartsItems.GenerateValueArray(ItemBodyPartSlugs);
 		Slugs.Append(MoveTempIfPossible(ItemBodyPartSlugs));
 
-		// Add item slugs from EquippedCustomizationItemActors
-		for (const auto& [SlotType, ActorsInSlot] : EquippedCustomizationItemActors)
+		for (const auto& Pair : EquippedCustomizationItemActors)
 		{
-			for (const auto& ActorsInfo : ActorsInSlot.EquippedItemActors)
+			for (const auto& ActorsInfo : Pair.Value.EquippedItemActors)
 			{
 				Slugs.Add(ActorsInfo.ItemSlug);
 			}
@@ -197,7 +200,7 @@ public:
 
 		return Slugs;
 	}
-
+	
 	bool operator==(const FCustomizationContextData& Other) const
 	{
 		return Somatotype == Other.Somatotype &&
@@ -214,9 +217,10 @@ public:
 	}
 
 	
-	void ReplaceOrAddSpawnedActors(const FName& InItemSlug, ECustomizationSlotType InSlotType, const TArray<TWeakObjectPtr<AActor>>& InActors)
+	void ReplaceOrAddSpawnedActors(const FName& InItemSlug, const FGameplayTag& InSlotTag, const TArray<TWeakObjectPtr<AActor>>& InActors)
 	{
-		FEquippedItemsInSlotInfo& SlotInfo = EquippedCustomizationItemActors.FindOrAdd(InSlotType);
+		if (!InSlotTag.IsValid()) return;
+		FEquippedItemsInSlotInfo& SlotInfo = EquippedCustomizationItemActors.FindOrAdd(InSlotTag);
 		FEquippedItemActorsInfo* FoundItem = SlotInfo.EquippedItemActors.FindByPredicate(
 			[&InItemSlug](const FEquippedItemActorsInfo& Info){ return Info.ItemSlug == InItemSlug; });
 		
@@ -236,7 +240,7 @@ public:
 		FString ActorsList;
 		for (auto Actor : EquippedCustomizationItemActors)
 		{
-			ActorsList += UEnum::GetValueAsString(Actor.Key) + Actor.Value.ToString() + TEXT(" \n");
+			ActorsList += Actor.Key.ToString() + Actor.Value.ToString() + TEXT(" \n");
 		}
 		return ActorsList;
 	}
@@ -246,7 +250,7 @@ public:
 		FString IterList;
 		for (auto Iter : EquippedBodyPartsItems)
 		{
-			IterList.Append(Iter.Key.ToString() + UEnum::GetValueAsString(Iter.Value)  + TEXT(" \n"));
+			IterList.Append(Iter.Key.ToString() + *Iter.Value.ToString()  + TEXT(" \n"));
 		}
 		return IterList;
 	}
@@ -269,7 +273,7 @@ ENUM_CLASS_FLAGS(ECustomizationInvalidationReason);
 ENUM_RANGE_BY_FIRST_AND_LAST(
 	ECustomizationInvalidationReason, ECustomizationInvalidationReason::None, ECustomizationInvalidationReason::All)
 
-inline bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS)
+inline bool operator==(const TMap<FGameplayTag, FName>& LHS, const TMap<FGameplayTag, FName>& RHS)
 {
 	if (LHS.Num() != RHS.Num())
 	{
@@ -278,8 +282,8 @@ inline bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, 
 
 	for (const auto& Pair : LHS)
 	{
-		const EBodyPartType* OtherValue = RHS.Find(Pair.Key);
-		if (!OtherValue || *OtherValue != Pair.Value)
+		const FName* RhsValue = RHS.Find(Pair.Key);
+		if (!RhsValue || *RhsValue != Pair.Value)
 		{
 			return false;
 		}
@@ -288,12 +292,12 @@ inline bool operator==(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, 
 	return true;
 }
 
-inline bool operator!=(const TMap<FName, EBodyPartType>& LHS, const TMap<FName, EBodyPartType>& RHS)
+inline bool operator!=(const TMap<FGameplayTag, FName>& LHS, const TMap<FGameplayTag, FName>& RHS)
 {
 	return !(LHS == RHS);
 }
 
-inline bool operator==(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& LHS, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS)
+inline bool operator==(const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& LHS, const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& RHS)
 {
 	if (LHS.Num() != RHS.Num())
 	{
@@ -312,7 +316,7 @@ inline bool operator==(const TMap<ECustomizationSlotType, FEquippedItemsInSlotIn
 	return true;
 }
 
-inline bool operator!=(const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& LHS, const TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo>& RHS)
+inline bool operator!=(const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& LHS, const TMap<FGameplayTag, FEquippedItemsInSlotInfo>& RHS)
 {
 	return !(LHS == RHS);
 }
@@ -386,103 +390,125 @@ void CheckDiff(const FCustomizationContextData& NewState, const FCustomizationCo
 {
 	Added = FCustomizationContextData();
     Removed = FCustomizationContextData();
-    
-    UE_LOG(LogTemp, Log, TEXT("CheckDiff: START. OldState Somato: %s, NewState Somato: %s"), 
-        *UEnum::GetValueAsString(OldStateToCompareAgainst.Somatotype), 
-        *UEnum::GetValueAsString(NewState.Somatotype));
-    UE_LOG(LogTemp, Log, TEXT("CheckDiff: OldState BodyParts Num: %d, NewState BodyParts Num: %d"), 
-        OldStateToCompareAgainst.EquippedBodyPartsItems.Num(), 
-        NewState.EquippedBodyPartsItems.Num());
 
-    TSet<FName> OldSlugs, NewSlugs;
-    for (const auto& Pair : OldStateToCompareAgainst.EquippedBodyPartsItems) OldSlugs.Add(Pair.Key);
-    for (const auto& Pair : NewState.EquippedBodyPartsItems) NewSlugs.Add(Pair.Key);
+	UE_LOG(LogTemp, Log, TEXT("CheckDiff: START. OldState Somatotype: %s, NewState Somatotype: %s"),
+	       *UEnum::GetValueAsString(OldStateToCompareAgainst.Somatotype),
+	       *UEnum::GetValueAsString(NewState.Somatotype));
+	UE_LOG(LogTemp, Log, TEXT("CheckDiff: OldState BodyParts Num: %d, NewState BodyParts Num: %d"),
+	       OldStateToCompareAgainst.EquippedBodyPartsItems.Num(),
+	       NewState.EquippedBodyPartsItems.Num());
 
-    TSet<FName> AddedSlugsSet = NewSlugs.Difference(OldSlugs);
-    for (const FName& Slug : AddedSlugsSet)
-    {
-        Added.EquippedBodyPartsItems.Add(Slug, NewState.EquippedBodyPartsItems.FindChecked(Slug));
-        UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Added BodyPart Slug: %s. Type: %s"), *Slug.ToString(), *UEnum::GetValueAsString(NewState.EquippedBodyPartsItems.FindChecked(Slug)));
-    }
+	// --- Body Parts Diff ---
+	for (const auto& NewPair : NewState.EquippedBodyPartsItems)
+	{
+		const FName* OldSlugPtr = OldStateToCompareAgainst.EquippedBodyPartsItems.Find(NewPair.Key);
+		// If slot didn't exist before, or the slug in the slot is different, it's an "add".
+		if (!OldSlugPtr || *OldSlugPtr != NewPair.Value)
+		{
+			Added.EquippedBodyPartsItems.Add(NewPair.Key, NewPair.Value);
+			UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Added/Replaced BodyPart. Tag: %s, Slug: %s"), *NewPair.Key.ToString(), *NewPair.Value.ToString());
+		}
+	}
 
-    TSet<FName> RemovedSlugsSet = OldSlugs.Difference(NewSlugs);
-    for (const FName& Slug : RemovedSlugsSet)
-    {
-        Removed.EquippedBodyPartsItems.Add(Slug, OldStateToCompareAgainst.EquippedBodyPartsItems.FindChecked(Slug)); 
-        UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Removed BodyPart Slug: %s. Type: %s"), *Slug.ToString(), *UEnum::GetValueAsString(OldStateToCompareAgainst.EquippedBodyPartsItems.FindChecked(Slug)));
-    }
-		
-    if (OldStateToCompareAgainst.EquippedCustomizationItemActors != NewState.EquippedCustomizationItemActors)
-    {
-        TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo> AddedActors;
-        TMap<ECustomizationSlotType, FEquippedItemsInSlotInfo> RemovedActors;
+	for (const auto& OldPair : OldStateToCompareAgainst.EquippedBodyPartsItems)
+	{
+		const FName* NewSlugPtr = NewState.EquippedBodyPartsItems.Find(OldPair.Key);
+		// If slot doesn't exist in the new state, or the slug is different, it's a "remove".
+		if (!NewSlugPtr || *NewSlugPtr != OldPair.Value)
+		{
+			Removed.EquippedBodyPartsItems.Add(OldPair.Key, OldPair.Value);
+			UE_LOG(LogTemp, Warning, TEXT("CheckDiff: Removed/Replaced BodyPart. Tag: %s, Slug: %s"), *OldPair.Key.ToString(), *OldPair.Value.ToString());
+		}
+	}
 
-        for (const auto& NewPair : NewState.EquippedCustomizationItemActors)
-        {
-            const FEquippedItemsInSlotInfo* OldSlotInfo = OldStateToCompareAgainst.EquippedCustomizationItemActors.Find(NewPair.Key);
-            if (!OldSlotInfo)
-            {
-                AddedActors.Add(NewPair.Key, NewPair.Value);
-            }
-            else 
-            {
-                FEquippedItemsInSlotInfo TempAddedItems;
-                for(const auto& NewItemActorInfo : NewPair.Value.EquippedItemActors)
-                {
-                    if(!OldSlotInfo->EquippedItemActors.ContainsByPredicate(
-                        [&](const FEquippedItemActorsInfo& OldItem){ return OldItem.ItemSlug == NewItemActorInfo.ItemSlug; }))
-                    {
-                        TempAddedItems.EquippedItemActors.Add(NewItemActorInfo);
-                    }
-                }
-                if(TempAddedItems.EquippedItemActors.Num() > 0) AddedActors.Add(NewPair.Key, TempAddedItems);
-            }
-        }
-        for (const auto& OldPair : OldStateToCompareAgainst.EquippedCustomizationItemActors)
-        {
-            const FEquippedItemsInSlotInfo* NewSlotInfo = NewState.EquippedCustomizationItemActors.Find(OldPair.Key);
-            if (!NewSlotInfo)
-            {
-                RemovedActors.Add(OldPair.Key, OldPair.Value);
-            }
-            else
-            {
-                FEquippedItemsInSlotInfo TempRemovedItems;
-                for(const auto& OldItemActorInfo : OldPair.Value.EquippedItemActors)
-                {
-                     if(!NewSlotInfo->EquippedItemActors.ContainsByPredicate(
-                        [&](const FEquippedItemActorsInfo& NewItem){ return NewItem.ItemSlug == OldItemActorInfo.ItemSlug; }))
-                    {
-                        TempRemovedItems.EquippedItemActors.Add(OldItemActorInfo);
-                    }
-                }
-                if(TempRemovedItems.EquippedItemActors.Num() > 0) RemovedActors.Add(OldPair.Key, TempRemovedItems);
-            }
-        }
-        if(AddedActors.Num() > 0) Added.EquippedCustomizationItemActors = AddedActors;
-        if(RemovedActors.Num() > 0) Removed.EquippedCustomizationItemActors = RemovedActors;
+	// --- Attached Actors Diff ---
+	if (OldStateToCompareAgainst.EquippedCustomizationItemActors != NewState.EquippedCustomizationItemActors)
+	{
+		TMap<FGameplayTag, FEquippedItemsInSlotInfo> AddedActors;
+		TMap<FGameplayTag, FEquippedItemsInSlotInfo> RemovedActors;
 
-        if (AddedActors.Num() > 0 || RemovedActors.Num() > 0) {
-             UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedCustomizationItemActors changed. Added maps: %d, Removed maps: %d"), AddedActors.Num(), RemovedActors.Num());
-        }
-    }
-		
-    if (OldStateToCompareAgainst.EquippedMaterialsMap != NewState.EquippedMaterialsMap)
-    {
-        for(const auto& NewMatPair : NewState.EquippedMaterialsMap) {
-            if(!OldStateToCompareAgainst.EquippedMaterialsMap.Contains(NewMatPair.Key)) {
-                Added.EquippedMaterialsMap.Add(NewMatPair.Key, NewMatPair.Value);
-            }
-        }
-        for(const auto& OldMatPair : OldStateToCompareAgainst.EquippedMaterialsMap) {
-            if(!NewState.EquippedMaterialsMap.Contains(OldMatPair.Key)) {
-                Removed.EquippedMaterialsMap.Add(OldMatPair.Key, OldMatPair.Value);
-            }
-        }
-        if(Added.EquippedMaterialsMap.Num() > 0 || Removed.EquippedMaterialsMap.Num() > 0) {
-            UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedMaterialsMap changed. Added: %d, Removed: %d"), Added.EquippedMaterialsMap.Num(), Removed.EquippedMaterialsMap.Num());
-        }
-    }
+		for (const auto& NewPair : NewState.EquippedCustomizationItemActors)
+		{
+			const FEquippedItemsInSlotInfo* OldSlotInfo = OldStateToCompareAgainst.EquippedCustomizationItemActors.Find(NewPair.Key);
+			if (!OldSlotInfo)
+			{
+				AddedActors.Add(NewPair.Key, NewPair.Value);
+			}
+			else
+			{
+				FEquippedItemsInSlotInfo TempAddedItems;
+				for (const auto& NewItemActorInfo : NewPair.Value.EquippedItemActors)
+				{
+					if (!OldSlotInfo->EquippedItemActors.ContainsByPredicate(
+						[&](const FEquippedItemActorsInfo& OldItem) { return OldItem.ItemSlug == NewItemActorInfo.ItemSlug; }))
+					{
+						TempAddedItems.EquippedItemActors.Add(NewItemActorInfo);
+					}
+				}
+				if (TempAddedItems.EquippedItemActors.Num() > 0) AddedActors.Add(NewPair.Key, TempAddedItems);
+			}
+		}
+		for (const auto& OldPair : OldStateToCompareAgainst.EquippedCustomizationItemActors)
+		{
+			const FEquippedItemsInSlotInfo* NewSlotInfo = NewState.EquippedCustomizationItemActors.Find(OldPair.Key);
+			if (!NewSlotInfo)
+			{
+				RemovedActors.Add(OldPair.Key, OldPair.Value);
+			}
+			else
+			{
+				FEquippedItemsInSlotInfo TempRemovedItems;
+				for (const auto& OldItemActorInfo : OldPair.Value.EquippedItemActors)
+				{
+					if (!NewSlotInfo->EquippedItemActors.ContainsByPredicate(
+						[&](const FEquippedItemActorsInfo& NewItem) { return NewItem.ItemSlug == OldItemActorInfo.ItemSlug; }))
+					{
+						TempRemovedItems.EquippedItemActors.Add(OldItemActorInfo);
+					}
+				}
+				if (TempRemovedItems.EquippedItemActors.Num() > 0) RemovedActors.Add(OldPair.Key, TempRemovedItems);
+			}
+		}
+		if (AddedActors.Num() > 0) Added.EquippedCustomizationItemActors = AddedActors;
+		if (RemovedActors.Num() > 0) Removed.EquippedCustomizationItemActors = RemovedActors;
+
+		if (AddedActors.Num() > 0 || RemovedActors.Num() > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedCustomizationItemActors changed. Added maps: %d, Removed maps: %d"), AddedActors.Num(), RemovedActors.Num());
+		}
+	}
+
+	// --- Materials Diff ---
+	if (OldStateToCompareAgainst.EquippedMaterialsMap != NewState.EquippedMaterialsMap)
+	{
+		for (const auto& NewMatPair : NewState.EquippedMaterialsMap)
+		{
+			if (!OldStateToCompareAgainst.EquippedMaterialsMap.Contains(NewMatPair.Key))
+			{
+				Added.EquippedMaterialsMap.Add(NewMatPair.Key, NewMatPair.Value);
+			}
+			else
+			{
+				const FName& OldSlug = OldStateToCompareAgainst.EquippedMaterialsMap.FindChecked(NewMatPair.Key);
+				if (OldSlug != NewMatPair.Value)
+				{
+					Removed.EquippedMaterialsMap.Add(NewMatPair.Key, OldSlug);
+					Added.EquippedMaterialsMap.Add(NewMatPair.Key, NewMatPair.Value);
+				}
+			}
+		}
+		for (const auto& OldMatPair : OldStateToCompareAgainst.EquippedMaterialsMap)
+		{
+			if (!NewState.EquippedMaterialsMap.Contains(OldMatPair.Key))
+			{
+				Removed.EquippedMaterialsMap.Add(OldMatPair.Key, OldMatPair.Value);
+			}
+		}
+		if (Added.EquippedMaterialsMap.Num() > 0 || Removed.EquippedMaterialsMap.Num() > 0)
+		{
+			UE_LOG(LogTemp, Log, TEXT("CheckDiff: EquippedMaterialsMap changed. Added: %d, Removed: %d"), Added.EquippedMaterialsMap.Num(), Removed.EquippedMaterialsMap.Num());
+		}
+	}
 
     // Somatotype
     if (OldStateToCompareAgainst.Somatotype != NewState.Somatotype)
