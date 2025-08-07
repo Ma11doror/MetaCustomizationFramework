@@ -18,6 +18,11 @@ bool UCustomizationSettings::GetEnableDebug() const
 	return bEnableDebug;
 }
 
+EMeshMergeMethod UCustomizationSettings::GetMeshMergeMethod() const
+{
+	return MeshMergeMethod;
+}
+
 void UCustomizationSettings::Clear()
 {
 	CategoryName = TEXT("Customization");

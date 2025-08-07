@@ -5,7 +5,7 @@
 #include "AsyncCustomisation/Public/Components/CustomizationComponent.h"
 
 void CustomizationUtilities::SetBodyPartSkeletalMesh(
-	UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, const FGameplayTag& TargetSlotTag)
+	UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, const FBodyPartVariant* Variant, const FGameplayTag& TargetSlotTag)
 {
 	if (!Self)
 	{
@@ -26,11 +26,11 @@ void CustomizationUtilities::SetBodyPartSkeletalMesh(
 		return;
 	}
 	
-	SetSkeletalMesh(Self, SourceSkeletalMesh, TargetBodyPartSkeletal, TargetSlotTag);
+	SetSkeletalMesh(Self, SourceSkeletalMesh, TargetBodyPartSkeletal, Variant, TargetSlotTag);
 }
 
 void CustomizationUtilities::SetSkeletalMesh(
-	UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, USkeletalMeshComponent* TargetSkeletalMeshComponent, const FGameplayTag& TargetSlotTag)
+	UCustomizationComponent* Self, USkeletalMesh* SourceSkeletalMesh, USkeletalMeshComponent* TargetSkeletalMeshComponent, const FBodyPartVariant* Variant, const FGameplayTag& TargetSlotTag)
 {
 	if (!Self)
 	{
@@ -62,7 +62,7 @@ void CustomizationUtilities::SetSkeletalMesh(
 		}
 		else 
 		{
-			SetSkeletalMeshAssetWithMaterials(TargetSkeletalMeshComponent, SourceSkeletalMesh);
+			SetSkeletalMeshAssetWithMaterials(TargetSkeletalMeshComponent, SourceSkeletalMesh, Variant);
 		}
 		
 		if (!SourceSkeletalMesh)

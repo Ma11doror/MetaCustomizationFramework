@@ -1,5 +1,6 @@
 #include "AsyncCustomisation/Public/Components/CustomizationComponent.h"
 
+#include "SkeletalMeshMerge.h"
 #include "AsyncCustomisation/Public/BaseCharacter.h"
 #include "AsyncCustomisation/Public/Components/Core/CustomizationUtilities.h"
 #include "AsyncCustomisation/Public/Constants/GlobalConstants.h"
@@ -10,6 +11,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Utilities/CustomizationSettings.h"
 #include "Utilities/MetaGameLib.h"
+#include "Utilities/MeshMerger/MeshMergeSubsystem.h"
 
 
 DEFINE_LOG_CATEGORY(LogCustomizationComponent);
@@ -43,7 +45,7 @@ void UCustomizationComponent::EquipItem(const FName& ItemSlug)
 	{
 		FCustomizationContextData TargetState = CurrentCustomizationState;
 		AddItemToTargetState(ItemSlug, TargetState);
-		Invalidate(TargetState);
+		Invalidate(TargetState, false);
 	});
 }
 
@@ -64,7 +66,7 @@ void UCustomizationComponent::EquipItems(const TArray<FName>& Items)
         
 		if (bStateChanged)
 		{
-			Invalidate(TargetState);
+			Invalidate(TargetState, false);
 		}
 	});
 }
@@ -82,7 +84,6 @@ void UCustomizationComponent::UnequipItem(const FName& ItemSlug)
 	// 1. Copy Current state
 	FCustomizationContextData TargetState = CurrentCustomizationState;
 	bool bStateChanged = false;
-	bool bWasSkinRemoved = false;
 
 	// 2. 
 	if (CustomizationAssetClass->IsChildOf(UCustomizationDataAsset::StaticClass()))
@@ -133,7 +134,6 @@ void UCustomizationComponent::UnequipItem(const FName& ItemSlug)
 		{
 			TargetState.EquippedMaterialsMap.Remove(SlotForMaterial);
 			bStateChanged = true;
-			bWasSkinRemoved = true;
 		}
 	}
 	else if (CustomizationAssetClass->IsChildOf(UBodyPartAsset::StaticClass()))
@@ -166,14 +166,7 @@ void UCustomizationComponent::UnequipItem(const FName& ItemSlug)
 	// 3.
 	if (bStateChanged)
 	{
-		if (bWasSkinRemoved)
-		{
-			Invalidate(TargetState, false, ECustomizationInvalidationReason::All);
-		}
-		else
-		{
-			Invalidate(TargetState);
-		}
+		Invalidate(TargetState, false);
 	}
 }
 
@@ -199,32 +192,55 @@ void UCustomizationComponent::ResetAll()
 
 void UCustomizationComponent::HardRefreshAll()
 {
-	for (auto& [SlotTag, SkeletalComp] : SpawnedMeshComponents)
+	switch (UCustomizationSettings::Get()->GetMeshMergeMethod())
 	{
-		if (SkeletalComp)
+	case EMeshMergeMethod::SyncMeshMerge:
 		{
-			SkeletalComp->DestroyComponent();
-		}
-	}
-	SpawnedMeshComponents.Empty();
-
-	for (auto& [SlotType, ActorsInSlot] : CurrentCustomizationState.EquippedCustomizationItemActors)
-	{
-		for (auto& ActorsInfo : ActorsInSlot.EquippedItemActors)
-		{
-			for (const auto& ItemRelatedActor : ActorsInfo.ItemRelatedActors)
+			// Only reset the main mesh, do not touch SpawnedMeshComponents
+			if (OwningCharacter.IsValid() && OwningCharacter->GetMesh())
 			{
-				if (ItemRelatedActor.IsValid())
+				OwningCharacter->GetMesh()->SetSkeletalMeshAsset(nullptr);
+				// Optionally clear materials if needed
+				for (int32 i = 0; i < OwningCharacter->GetMesh()->GetNumMaterials(); ++i)
 				{
-					if (AActor* ValidActor = ItemRelatedActor.Get())
+					OwningCharacter->GetMesh()->SetMaterial(i, nullptr);
+				}
+			}
+			break;
+		}
+
+	case EMeshMergeMethod::MasterPose:
+		{
+			for (auto& [SlotTag, SkeletalComp] : SpawnedMeshComponents)
+			{
+				if (SkeletalComp)
+				{
+					SkeletalComp->DestroyComponent();
+				}
+			}
+			SpawnedMeshComponents.Empty();
+
+			for (auto& [SlotType, ActorsInSlot] : CurrentCustomizationState.EquippedCustomizationItemActors)
+			{
+				for (auto& ActorsInfo : ActorsInSlot.EquippedItemActors)
+				{
+					for (const auto& ItemRelatedActor : ActorsInfo.ItemRelatedActors)
 					{
-						const FDetachmentTransformRules DetachmentTransformRules(EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, false);
-						ValidActor->DetachFromActor(DetachmentTransformRules);
-						ValidActor->Destroy();
+						if (ItemRelatedActor.IsValid())
+						{
+							if (AActor* ValidActor = ItemRelatedActor.Get())
+							{
+								const FDetachmentTransformRules DetachmentTransformRules(EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, EDetachmentRule::KeepWorld, false);
+								ValidActor->DetachFromActor(DetachmentTransformRules);
+								ValidActor->Destroy();
+							}
+						}
 					}
 				}
 			}
+			break;
 		}
+	default: UE_LOG(LogTemp, Warning, TEXT("Something went wrong with MergeMethod"));
 	}
 }
 
@@ -323,7 +339,7 @@ void UCustomizationComponent::Invalidate(const FCustomizationContextData& Target
 
 	// 2. Calculate final reason
 	// if (CombinedReason == ECustomizationInvalidationReason::None)
-	if (static_cast<int64>(CombinedReason) == 0)
+	if (static_cast<int8>(CombinedReason) == 0)
 	{
 		UE_LOG(LogCustomizationComponent, Log, TEXT("Invalidate: IMMEDIATE invalidation skipped: CombinedReason is None."));
 
@@ -611,11 +627,12 @@ void UCustomizationComponent::InvalidateColoration(FCustomizationContextData& Ta
 			MaterialAssetIdsToLoad.AddUnique(AssetId);
 		}
 	}
-
+	
 	if (MaterialAssetIdsToLoad.IsEmpty())
 	{
-		UE_LOG(LogCustomizationComponent, Log, TEXT("InvalidateColoration: No materials to load or apply."));
-		PendingInvalidationCounter.Pop();
+		UE_LOG(LogCustomizationComponent, Log, TEXT("InvalidateColoration: No new materials to load, proceeding to process potential removals."));
+		ProcessColoration(this->ProcessingTargetState, {});
+		PendingInvalidationCounter.Pop(); // Pop the counter for the InvalidateColoration step itself.
 		return;
 	}
 
@@ -795,6 +812,13 @@ void UCustomizationComponent::ProcessBodyParts(FCustomizationContextData& Target
 
 void UCustomizationComponent::ProcessColoration(FCustomizationContextData& TargetStateToModify, TArray<UObject*> LoadedMaterialAssets)
 {
+	const EMeshMergeMethod MergeMethod = UCustomizationSettings::Get()->GetMeshMergeMethod();
+	if (MergeMethod != EMeshMergeMethod::MasterPose)
+	{
+		ApplyMergedMaterials();
+		return;
+	}
+	
 	// 1.
 	TMap<FName, FGameplayTag> SlugToSlotTagMap;
 	for (UObject* LoadedAsset : LoadedMaterialAssets)
@@ -878,6 +902,90 @@ void UCustomizationComponent::ProcessColoration(FCustomizationContextData& Targe
 			}
 		}
 	}
+	// 5. Reset materials for slots that no longer have a custom skin applied
+	for (const auto& BodyPartPair : TargetStateToModify.EquippedBodyPartsItems)
+	{
+		const FGameplayTag& SlotTag = BodyPartPair.Key;
+		const FName& BodyPartSlug = BodyPartPair.Value;
+
+		if (!TargetStateToModify.EquippedMaterialsMap.Contains(SlotTag))
+		{
+			// This slot should have its default materials.
+			if (auto* AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager())
+			{
+				FPrimaryAssetId BodyPartAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(BodyPartSlug);
+				if (UBodyPartAsset* BodyPartAsset = AssetManager->LoadPrimaryAsset<UBodyPartAsset>(BodyPartAssetId))
+				{
+					TArray<FPrimaryAssetId> AllEquippedItemAssetIdsInContext;
+					for (const FName& Slug : TargetStateToModify.GetEquippedSlugs())
+					{
+						if (FPrimaryAssetId AssetId = CommonUtilities::ItemSlugToCustomizationAssetId(Slug); AssetId.IsValid())
+						{
+							AllEquippedItemAssetIdsInContext.Add(AssetId);
+						}
+					}
+					
+					const FBodyPartVariant* Variant = BodyPartAsset->GetMatchedVariant(AllEquippedItemAssetIdsInContext);
+					if (USkeletalMeshComponent* TargetMesh = CreateOrGetMeshComponentForSlot(SlotTag))
+					{
+						UE_LOG(LogCustomizationComponent, Log, TEXT("ProcessColoration: Slot %s has no custom skin. Resetting to default materials."), *SlotTag.ToString());
+						CustomizationUtilities::ApplyDefaultMaterials(TargetMesh, Variant);
+					}
+				}
+			}
+		}
+	}
+}
+
+void UCustomizationComponent::ApplyMergedMaterials()
+{
+	if (!OwningCharacter.IsValid() || !OwningCharacter->GetMesh() || !OwningCharacter->GetMesh()->GetSkeletalMeshAsset())
+	{
+		return;
+	}
+
+	USkeletalMeshComponent* TargetMeshComponent = OwningCharacter->GetMesh();
+	USkeletalMesh* CurrentMesh = TargetMeshComponent->GetSkeletalMeshAsset();
+
+	// First, apply all default materials from the merged mesh itself to ensure a clean state
+	// TODO:: useless action, check if we have skins for slots somehow at this stage and skip?
+	const auto& DefaultMaterials = CurrentMesh->GetMaterials();
+	for (int32 i = 0; i < DefaultMaterials.Num(); ++i)
+	{
+		TargetMeshComponent->SetMaterial(i, DefaultMaterials[i].MaterialInterface);
+	}
+    
+	// Now, override with custom skins where applicable
+	auto* AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager();
+	if (!AssetManager)
+	{
+		return;
+	}
+    
+	for (const auto& MaterialPair : ProcessingTargetState.EquippedMaterialsMap)
+	{
+		const FGameplayTag& SlotTag = MaterialPair.Key;
+		const FName& SkinSlug = MaterialPair.Value;
+
+		for (const auto& MapPair : MergedMaterialMap)
+		{
+			if (MapPair.Value == SlotTag)
+			{
+				const int32 MaterialIndex = MapPair.Key;
+				FPrimaryAssetId SkinAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(SkinSlug);
+
+				if (auto* MaterialAsset = AssetManager->LoadPrimaryAsset<UMaterialCustomizationDataAsset>(SkinAssetId))
+				{
+					if(MaterialAsset->IndexWithApplyingMaterial.Contains(0))
+					{
+						UMaterialInterface* SkinMaterial = MaterialAsset->IndexWithApplyingMaterial[0];
+						TargetMeshComponent->SetMaterial(MaterialIndex, SkinMaterial);
+						UE_LOG(LogCustomizationComponent, Log, TEXT("Applied skin %s to merged mesh at index %d for slot %s"), *SkinSlug.ToString(), MaterialIndex, *SlotTag.ToString());
+					}
+				}
+			}
+		}
+	}
 }
 
 void UCustomizationComponent::HandleInvalidationPipelineCompleted()
@@ -923,37 +1031,40 @@ void UCustomizationComponent::ApplyBodySkin(const FCustomizationContextData& Tar
 	{
 		UE_LOG(LogCustomizationComponent, Verbose, TEXT("Applying Body Skin Mesh based on flags: %s"), *SkinVisibilityFlags.ToString());
 		FinalUsedSlotTags.Emplace(BodySkinSlotTag);
-		CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMeshVariant->BodyPartSkeletalMesh, BodySkinSlotTag);
+		CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMeshVariant->BodyPartSkeletalMesh, nullptr, BodySkinSlotTag);
 		DebugInfo.SkinCoverage = DebugInfo.FormatData(SkinVisibilityFlags);
 	}
 	else
 	{
 		UE_LOG(LogCustomizationComponent, Warning, TEXT("No matching Body Skin Mesh found for flags: %s. Resetting skin mesh."), *SkinVisibilityFlags.ToString());
-		CustomizationUtilities::SetBodyPartSkeletalMesh(this, nullptr, BodySkinSlotTag);
+		CustomizationUtilities::SetBodyPartSkeletalMesh(this, nullptr, nullptr, BodySkinSlotTag);
 		DebugInfo.SkinCoverage = FString::Printf(TEXT("No Match: %s"), *SkinVisibilityFlags.ToString());
 	}
 }
 
 void UCustomizationComponent::ResetUnusedBodyParts(const TSet<FGameplayTag>& FinalUsedSlotTags)
 {
-	UE_LOG(LogCustomizationComponent, Verbose, TEXT("Resetting unused body parts (not in FinalUsedSlotTags)..."));
-	
-	TArray<FGameplayTag> TagsToDestroy;
-	for (const auto& [SlotTag, SkeletalComp] : SpawnedMeshComponents)
+    const EMeshMergeMethod MergeMethod = UCustomizationSettings::Get()->GetMeshMergeMethod();
+	if (MergeMethod == EMeshMergeMethod::MasterPose)
 	{
-		if (SkeletalComp && !FinalUsedSlotTags.Contains(SlotTag))
+		// --- OLD MASTER POSE PIPELINE ---
+		UE_LOG(LogCustomizationComponent, Verbose, TEXT("Resetting unused body parts (not in FinalUsedSlotTags)..."));
+		TArray<FGameplayTag> TagsToDestroy;
+		for (const auto& [SlotTag, SkeletalComp] : SpawnedMeshComponents)
 		{
-			TagsToDestroy.Add(SlotTag);
+			if (SkeletalComp && !FinalUsedSlotTags.Contains(SlotTag))
+			{
+				TagsToDestroy.Add(SlotTag);
+			}
 		}
-	}
-
-	for (const FGameplayTag& Tag : TagsToDestroy)
-	{
-		UE_LOG(LogCustomizationComponent, Verbose, TEXT("Destroying component for unused SlotTag: %s"), *Tag.ToString());
-		USkeletalMeshComponent* CompToDestroy = SpawnedMeshComponents.FindAndRemoveChecked(Tag).Get();
-		if (IsValid(CompToDestroy))
+		for (const FGameplayTag& Tag : TagsToDestroy)
 		{
-			CompToDestroy->DestroyComponent();
+			UE_LOG(LogCustomizationComponent, Verbose, TEXT("Destroying component for unused SlotTag: %s"), *Tag.ToString());
+			USkeletalMeshComponent* CompToDestroy = SpawnedMeshComponents.FindAndRemoveChecked(Tag).Get();
+			if (IsValid(CompToDestroy))
+			{
+				CompToDestroy->DestroyComponent();
+			}
 		}
 	}
 }
@@ -1205,59 +1316,147 @@ FResolvedVariantInfo UCustomizationComponent::ResolveBodyPartVariantsAndInitialA
 	return Result;
 }
 
+void UCustomizationComponent::ApplyBodyPartsMasterPose(USomatotypeDataAsset* LoadedSomatotypeDataAsset, const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap, TSet<FGameplayTag>& FinalUsedSlotTags, const FCustomizationContextData& TargetStateContext)
+{
+	// 1. Apply Body Skin Mesh
+	FSkinFlagCombination SkinVisibilityFlags;
+	for (const auto& Pair : SlugToResolvedVariantMap)
+	{
+		if (Pair.Value)
+		{
+			SkinVisibilityFlags.AddFlag(Pair.Value->SkinCoverageFlags.FlagMask);
+		}
+	}
+	auto SkinMeshVariant = SkinVisibilityFlags.GetMatch(LoadedSomatotypeDataAsset->SkinAssociation, SkinVisibilityFlags.FlagMask);
+	const FGameplayTag BodySkinSlotTag = FGameplayTag::RequestGameplayTag(GLOBAL_CONSTANTS::BodySkinSlotTagName);
+
+	if (SkinMeshVariant)
+	{
+		UE_LOG(LogCustomizationComponent, Verbose, TEXT("[MasterPose] Applying Body Skin Mesh based on flags: %s"), *SkinVisibilityFlags.ToString());
+		FinalUsedSlotTags.Emplace(BodySkinSlotTag);
+		CustomizationUtilities::SetBodyPartSkeletalMesh(this, SkinMeshVariant->BodyPartSkeletalMesh, nullptr, BodySkinSlotTag);
+	}
+	else
+	{
+		UE_LOG(LogCustomizationComponent, Warning, TEXT("[MasterPose] No matching Body Skin Mesh found for flags: %s. Resetting skin mesh."), *SkinVisibilityFlags.ToString());
+		CustomizationUtilities::SetBodyPartSkeletalMesh(this, nullptr, nullptr, BodySkinSlotTag);
+	}
+    
+	// 2. Apply Body Part Meshes
+	for (const auto& Pair : TargetStateContext.EquippedBodyPartsItems)
+	{
+		const FGameplayTag& SlotTag = Pair.Key;
+		const FName& Slug = Pair.Value;
+        
+		if (const FBodyPartVariant* const* FoundVariantPtr = SlugToResolvedVariantMap.Find(Slug))
+		{
+			if (const FBodyPartVariant* Variant = *FoundVariantPtr)
+			{
+				UE_LOG(LogCustomizationComponent, Verbose, TEXT("[MasterPose] Applying BodyPart '%s' to slot '%s'"), *Slug.ToString(), *SlotTag.ToString());
+				CustomizationUtilities::SetBodyPartSkeletalMesh(this, Variant->BodyPartSkeletalMesh, Variant, SlotTag);
+			}
+		}
+	}
+
+	// 3. Reset unused parts
+	ResetUnusedBodyParts(FinalUsedSlotTags);
+    
+	// 4. Finalize
+	HandleInvalidationPipelineCompleted();
+}
+
+void UCustomizationComponent::ApplyBodyPartsMeshMerge(FCustomizationContextData& TargetStateContext, USomatotypeDataAsset* LoadedSomatotypeDataAsset, const TArray<FName>& FinalActiveSlugs, const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap)
+{
+	TArray<FMeshToMergeData> MeshesToMergeData;
+
+    // Main skin mesh (required)
+    USkeletalMesh* SkinMesh = nullptr;
+    {
+        FSkinFlagCombination SkinVisibilityFlags;
+        for (const auto& Pair : SlugToResolvedVariantMap)
+        {
+            if (Pair.Value)
+            {
+                SkinVisibilityFlags.AddFlag(Pair.Value->SkinCoverageFlags.FlagMask);
+            }
+        }
+        auto SkinMeshVariant = SkinVisibilityFlags.GetMatch(LoadedSomatotypeDataAsset->SkinAssociation, SkinVisibilityFlags.FlagMask);
+        if (SkinMeshVariant && SkinMeshVariant->BodyPartSkeletalMesh)
+        {
+        	SkinMesh = SkinMeshVariant->BodyPartSkeletalMesh;
+        	FMeshToMergeData SkinData;
+        	SkinData.SkeletalMesh = SkinMesh;
+        	SkinData.SlotTag = FGameplayTag::RequestGameplayTag(GLOBAL_CONSTANTS::BodySkinSlotTagName);
+        	MeshesToMergeData.Add(SkinData);
+        }
+        else
+        {
+            UE_LOG(LogCustomizationComponent, Error, TEXT("[MESH MERGE] No valid skin mesh found for current somatotype and flags! Aborting merge."));
+            HandleInvalidationPipelineCompleted();
+            return;
+        }
+    }
+
+    // Body parts (attachments)
+    for (const FName& Slug : FinalActiveSlugs)
+    {
+        const FBodyPartVariant* const* FoundVariantPtr = SlugToResolvedVariantMap.Find(Slug);
+        if (FoundVariantPtr && (*FoundVariantPtr) && (*FoundVariantPtr)->BodyPartSkeletalMesh)
+        {
+            USkeletalMesh* PartMesh = (*FoundVariantPtr)->BodyPartSkeletalMesh;
+            FGameplayTag SlotTag = TargetStateContext.EquippedBodyPartsItems.FindKey(Slug) ? *TargetStateContext.EquippedBodyPartsItems.FindKey(Slug) : FGameplayTag();
+            if (PartMesh && PartMesh != SkinMesh)
+            {
+            	FMeshToMergeData PartData;
+            	PartData.SkeletalMesh = PartMesh;
+            	if (const FGameplayTag* SlotTagPtr = TargetStateContext.EquippedBodyPartsItems.FindKey(Slug))
+            	{
+            		PartData.SlotTag = *SlotTagPtr;
+            	}
+            	MeshesToMergeData.Add(PartData);
+            }
+        }
+    }
+    
+    if (!SkinMesh)
+    {
+        if (OwningCharacter.IsValid() && OwningCharacter->GetMesh())
+        {
+            OwningCharacter->GetMesh()->SetSkeletalMeshAsset(nullptr);
+        }
+        HandleInvalidationPipelineCompleted();
+        return;
+    }
+    
+	if (MeshesToMergeData.IsEmpty())
+	{
+		if (OwningCharacter.IsValid() && OwningCharacter->GetMesh())
+		{
+			OwningCharacter->GetMesh()->SetSkeletalMeshAsset(nullptr);
+		}
+		HandleInvalidationPipelineCompleted();
+		return;
+	}
+	
+	UMeshMergeSubsystem::MergeMeshesWithSettings(GetWorld(), MeshesToMergeData, &MergedMaterialMap, FOnMeshMergeCompleteDelegate::CreateUObject(this, &UCustomizationComponent::OnMergeCompleted));
+}
+
 void UCustomizationComponent::ApplyBodyPartMeshesAndSkin(FCustomizationContextData& TargetStateContext,
                                                          USomatotypeDataAsset* LoadedSomatotypeDataAsset,
                                                          TSet<FGameplayTag>& FinalUsedSlotTags,
                                                          const TArray<FName>& FinalActiveSlugs,
                                                          const TMap<FName,
-                                                         const FBodyPartVariant*>& SlugToResolvedVariantMap)
+                                                                    const FBodyPartVariant*>& SlugToResolvedVariantMap)
 {
-	// 1. Apply the main body skin mesh based on coverage flags
-	ApplyBodySkin(TargetStateContext, LoadedSomatotypeDataAsset, FinalUsedSlotTags, SlugToResolvedVariantMap);
+	const EMeshMergeMethod MergeMethod = UCustomizationSettings::Get()->GetMeshMergeMethod();
 
-	// 2. Reset skeletal meshes for any body parts no longer in use (considering potential BodySkin addition)
-	ResetUnusedBodyParts(FinalUsedSlotTags);
-
-	// 3. Apply skeletal meshes for all active/equipped body parts
-	UE_LOG(LogCustomizationComponent, Log, TEXT("ApplyBodyPartMeshesAndSkin: Applying final body part meshes for %d active slugs..."), FinalActiveSlugs.Num());
-	for (const FName& Slug : FinalActiveSlugs)
+	if (MergeMethod == EMeshMergeMethod::MasterPose)
 	{
-		const FGameplayTag* SlotTagPtr = TargetStateContext.EquippedBodyPartsItems.FindKey(Slug);
-		if (!SlotTagPtr)
-		{
-			UE_LOG(LogCustomizationComponent, Error, TEXT("ApplyBodyPartMeshesAndSkin: Slug '%s' not found in rebuilt TargetState.EquippedBodyPartsItems. This is unexpected."), *Slug.ToString());
-			continue;
-		}
-		const FGameplayTag SlotTag = *SlotTagPtr;
-
-		const FBodyPartVariant* const* FoundVariantPtr = SlugToResolvedVariantMap.Find(Slug);
-		if (FoundVariantPtr && (*FoundVariantPtr) && (*FoundVariantPtr)->BodyPartSkeletalMesh)
-		{
-			const FBodyPartVariant* Variant = *FoundVariantPtr;
-			UE_LOG(LogCustomizationComponent, Verbose, TEXT("ApplyBodyPartMeshesAndSkin: Setting mesh for BodyPart: %s ..."), *Slug.ToString());
-			CustomizationUtilities::SetBodyPartSkeletalMesh(this, Variant->BodyPartSkeletalMesh, SlotTag);
-			
-			bool bIsSkinAppliedToThisSlot = TargetStateContext.EquippedMaterialsMap.Contains(SlotTag);
-
-			if (!bIsSkinAppliedToThisSlot)
-			{
-				if (USkeletalMeshComponent* TargetMesh = CreateOrGetMeshComponentForSlot(SlotTag))
-				{
-					for (int32 i = 0; i < Variant->DefaultMaterials.Num(); ++i)
-					{
-						if (TargetMesh->GetNumMaterials() > i)
-						{
-							TargetMesh->SetMaterial(i, Variant->DefaultMaterials[i]);
-						}
-					}
-				}
-			}
-		}
-		else
-		{
-			UE_LOG(LogCustomizationComponent, Warning, TEXT("ApplyBodyPartMeshesAndSkin: No valid mesh or variant found for BodyPart: %s (Tag: %s). Mesh will not be set. Consider resetting this slot."), *Slug.ToString(), *SlotTag.ToString());
-			CustomizationUtilities::SetBodyPartSkeletalMesh(this, nullptr, SlotTag);
-		}
+		ApplyBodyPartsMasterPose(LoadedSomatotypeDataAsset, SlugToResolvedVariantMap, FinalUsedSlotTags, TargetStateContext);
+	}
+	else 
+	{
+		ApplyBodyPartsMeshMerge(TargetStateContext, LoadedSomatotypeDataAsset, FinalActiveSlugs, SlugToResolvedVariantMap);
 	}
 }
 
@@ -1821,4 +2020,63 @@ void UCustomizationComponent::DrawDebugTextBlock(const FVector& Location, const 
 		Color,
 		0.1f
 	);
+}
+
+void UCustomizationComponent::OnMergeCompleted(USkeletalMesh* MergedMesh)
+{
+	if (!OwningCharacter.IsValid() || !OwningCharacter->GetMesh())
+	{
+		UE_LOG(LogCustomizationComponent, Error, TEXT("[MESH MERGE] OwningCharacter or its mesh is invalid!"));
+		HandleInvalidationPipelineCompleted();
+		return;
+	}
+	if (!MergedMesh)
+	{
+		UE_LOG(LogCustomizationComponent, Error, TEXT("[MESH MERGE] Merge failed, merged mesh is nullptr!"));
+		// If merge fails, we might want to clear the mesh to indicate an error state
+		OwningCharacter->GetMesh()->SetSkeletalMeshAsset(nullptr);
+		HandleInvalidationPipelineCompleted();
+		return;
+	}
+	// Set merged mesh to main component
+	OwningCharacter->GetMesh()->SetSkeletalMeshAsset(MergedMesh);
+	// Apply materials based on the map filled by the merge subsystem
+	USkeletalMeshComponent* TargetMeshComponent = OwningCharacter->GetMesh();
+    
+	// Now, override with custom skins where applicable
+	auto* AssetManager = UCustomizationAssetManager::GetCustomizationAssetManager();
+	if (!AssetManager)
+	{
+		HandleInvalidationPipelineCompleted();
+		return;
+	}
+    
+	for (const auto& MaterialPair : ProcessingTargetState.EquippedMaterialsMap)
+	{
+		const FGameplayTag& SlotTag = MaterialPair.Key;
+		const FName& SkinSlug = MaterialPair.Value;
+
+		for (const auto& MapPair : MergedMaterialMap)
+		{
+			if (MapPair.Value == SlotTag)
+			{
+				const int32 MaterialIndex = MapPair.Key;
+				FPrimaryAssetId SkinAssetId = CommonUtilities::ItemSlugToCustomizationAssetId(SkinSlug);
+
+				if (auto* MaterialAsset = AssetManager->LoadPrimaryAsset<UMaterialCustomizationDataAsset>(SkinAssetId))
+				{
+					if(MaterialAsset->IndexWithApplyingMaterial.Contains(0))
+					{
+						UMaterialInterface* SkinMaterial = MaterialAsset->IndexWithApplyingMaterial[0];
+						TargetMeshComponent->SetMaterial(MaterialIndex, SkinMaterial);
+						UE_LOG(LogCustomizationComponent, Log, TEXT("Applied skin %s to merged mesh at index %d for slot %s"), *SkinSlug.ToString(), MaterialIndex, *SlotTag.ToString());
+					}
+				}
+			}
+		}
+	}
+	ApplyMergedMaterials();
+	
+	UE_LOG(LogCustomizationComponent, Log, TEXT("[MESH MERGE] Successfully applied merged mesh to main component."));
+	HandleInvalidationPipelineCompleted();
 }

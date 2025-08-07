@@ -6,9 +6,6 @@
 #include "Constants/GlobalConstants.h"
 #include "Core/CharacterComponentBase.h"
 #include "Core/CustomizationTypes.h"
-
-#include "Core/BodyPartTypes.h"
-
 #include "CustomizationComponent.generated.h"
 
 struct FGameplayTag;
@@ -140,6 +137,18 @@ protected:
 		const TArray<FName>& BodyPartSlugsToResolve,
 		const TMap<FName, UBodyPartAsset*>& SlugToAssetMap);
 
+	void ApplyBodyPartsMasterPose(
+		USomatotypeDataAsset* LoadedSomatotypeDataAsset,
+		const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap,
+		TSet<FGameplayTag>& FinalUsedSlotTags,
+		const FCustomizationContextData& TargetStateContext);
+
+	void ApplyBodyPartsMeshMerge(
+		FCustomizationContextData& TargetStateContext,
+		USomatotypeDataAsset* LoadedSomatotypeDataAsset,
+		const TArray<FName>& FinalActiveSlugs,
+		const TMap<FName, const FBodyPartVariant*>& SlugToResolvedVariantMap);
+	
 	void ApplyBodyPartMeshesAndSkin(
 		FCustomizationContextData& TargetStateContext,
 		USomatotypeDataAsset* LoadedSomatotypeDataAsset,
@@ -159,7 +168,7 @@ protected:
 	                             TArray<UBodyPartAsset*> LoadedBodyPartAssets);
 
 	void ProcessColoration(FCustomizationContextData& TargetStateToModify, TArray<UObject*> LoadedMaterialAssets);
-	
+	void ApplyMergedMaterials();
 	void HandleInvalidationPipelineCompleted();
 
 	TStrongObjectPtr<UTimerComponent> InvalidationTimer = nullptr;
@@ -268,4 +277,9 @@ private:
 	
 	void UpdateDebugInfo();
 	void DrawDebugTextBlock(const FVector& Location, const FString& Text, AActor* OwningActor, const FColor& Color);
+	
+	void OnMergeCompleted(USkeletalMesh* MergedMesh);
+
+	UPROPERTY()
+	TMap<int32, FGameplayTag> MergedMaterialMap;
 };

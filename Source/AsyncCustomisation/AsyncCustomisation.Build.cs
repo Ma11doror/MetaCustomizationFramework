@@ -7,11 +7,29 @@ public class AsyncCustomisation : ModuleRules
 	public AsyncCustomisation(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
-	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "DeveloperSettings", "CommonUI", "GameplayTags" });
+
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"InputCore",
+			"EnhancedInput",
+			"DeveloperSettings",
+			"CommonUI",
+			"GameplayTags",
+			"RenderCore",
+			"RHI"
+		});
 		
-		PrivateDependencyModuleNames.AddRange(new string[] {"UMG", "CommonUI", "ModelViewViewModel" });
-			//PrivateDependencyModuleNames.AddRange(new string[] {"UMG", "CommonUI", "ModelViewViewModelPreview", "ModelViewViewModel" });
+		PrivateDependencyModuleNames.AddRange(new string[] 
+		{
+			"UMG", 
+			"Slate",
+			"SlateCore",
+			"ModelViewViewModel"
+		});
+		//PrivateDependencyModuleNames.AddRange(new string[] {"UMG", "CommonUI", "ModelViewViewModelPreview", "ModelViewViewModel" });
 		// Uncomment if you are using Slate UI 
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });
 		

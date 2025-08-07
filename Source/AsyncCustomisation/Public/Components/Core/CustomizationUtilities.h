@@ -11,6 +11,7 @@
 #include "Utilities/DataTable/DataTableLibraryTypes.h"
 
 
+struct FMergeResult;
 class UCustomizationComponent;
 
 namespace CustomizationUtilities
@@ -80,18 +81,37 @@ namespace CustomizationUtilities
 		}
 	}
 	
-	inline void SetSkeletalMeshAssetWithMaterials(USkeletalMeshComponent* SkeletalMeshComponent, USkeletalMesh* SourceSkeletalMesh)
+	inline void ApplyDefaultMaterials(USkeletalMeshComponent* SkeletalMeshComponent, const FBodyPartVariant* Variant)
+	{
+		if (!SkeletalMeshComponent) return;
+
+		if (Variant && !Variant->DefaultMaterials.IsEmpty())
+		{
+			for (int32 Index = 0; Index < Variant->DefaultMaterials.Num(); ++Index)
+			{
+				SkeletalMeshComponent->SetMaterial(Index, Variant->DefaultMaterials[Index]);
+			}
+		}
+		else if (USkeletalMesh* SourceSkeletalMesh = SkeletalMeshComponent->GetSkeletalMeshAsset())
+		{
+			SetMaterialsFromMesh(SkeletalMeshComponent, SourceSkeletalMesh);
+		}
+	}
+	
+	inline void SetSkeletalMeshAssetWithMaterials(USkeletalMeshComponent* SkeletalMeshComponent, USkeletalMesh* SourceSkeletalMesh, const FBodyPartVariant* Variant)
 	{
 		SkeletalMeshComponent->SetSkeletalMeshAsset(SourceSkeletalMesh);
-		SetMaterialsFromMesh(SkeletalMeshComponent, SourceSkeletalMesh);
+		ApplyDefaultMaterials(SkeletalMeshComponent, Variant);
 	}
 
 	static void SetBodyPartSkeletalMesh(UCustomizationComponent* Self,
 	                                    USkeletalMesh* SourceSkeletalMesh,
+	                                    const FBodyPartVariant* Variant,
 	                                    const FGameplayTag& TargetSlotTag);
 	
 	static void SetSkeletalMesh(UCustomizationComponent* Self,
 								USkeletalMesh* SourceSkeletalMesh,
 								USkeletalMeshComponent* TargetSkeletalMeshComponent,
+								const FBodyPartVariant* Variant,
 								const FGameplayTag& TargetSlotTag);
 }
